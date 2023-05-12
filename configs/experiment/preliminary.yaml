@@ -1,0 +1,12 @@
+# @package _global_
+
+# defaults:
+  # - 
+  
+name: "setting up with code"
+seed: 0
+
+logger:
+  wandb:
+    project: ts_snr
+    # entity: borealisai

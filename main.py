@@ -9,7 +9,7 @@ from rich import print as pprint
 from omegaconf import OmegaConf
 import logging
 from src.config import initialize
-
+import scripts.drivers as drivers
 
 from torch.multiprocessing import set_sharing_strategy
 
@@ -17,28 +17,28 @@ from torch.multiprocessing import set_sharing_strategy
 set_sharing_strategy("file_system")
 
 
-def maybe_resume_previous_run(config):
-    """
-    If `run_id` is set in the config, then we will attempt to resume the previous run.
-    If the previous run is found, then the config will be loaded from the previous run.
-    If the previous run is not found, then the config will be saved to the current run.
-    """
-    if config.resume_id is not None:
-        logging.info("Experiment is set up with auto-resume")
-        if os.path.exists("config.yaml"):
-            logging.info("Found config for previous experiment")
-            config = OmegaConf.load("config.yaml")
-        else:
-            logging.info("No config found. Starting from scratch.")
-            conf = OmegaConf.to_yaml(config, resolve=True)
-            with open("config.yaml", "w") as f:
-                f.write(conf)
-    else:
-        conf = OmegaConf.to_yaml(config, resolve=True)
-        with open("config.yaml", "w") as f:
-            f.write(conf)
+# def maybe_resume_previous_run(config):
+    # """
+    # If `run_id` is set in the config, then we will attempt to resume the previous run.
+    # If the previous run is found, then the config will be loaded from the previous run.
+    # If the previous run is not found, then the config will be saved to the current run.
+    # """
+    # if config.resume_id is not None:
+    #     logging.info("Experiment is set up with auto-resume")
+    #     if os.path.exists("config.yaml"):
+    #         logging.info("Found config for previous experiment")
+    #         config = OmegaConf.load("config.yaml")
+    #     else:
+    #         logging.info("No config found. Starting from scratch.")
+    #         conf = OmegaConf.to_yaml(config, resolve=True)
+    #         with open("config.yaml", "w") as f:
+    #             f.write(conf)
+    # else:
+    #     conf = OmegaConf.to_yaml(config, resolve=True)
+    #     with open("config.yaml", "w") as f:
+    #         f.write(conf)
 
-    return config
+    # return config
 
 
 @hydra.main(
@@ -47,17 +47,11 @@ def maybe_resume_previous_run(config):
     version_base="1.1",
 )
 def main(config):
-    config = maybe_resume_previous_run(config)
+    # config = maybe_resume_previous_run(config)
     pprint(OmegaConf.to_object(config))
 
-    if "driver" not in config:
-        raise ValueError("No driver specified in config")
+    out = drivers.simple_run(config) # we can instantiate driver instead later
 
-    driver = instantiate(config.driver)
-    out = driver.run()
-    import wandb
-
-    wandb.finish()
     return out
 
 

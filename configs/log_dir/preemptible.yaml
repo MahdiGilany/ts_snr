@@ -1,0 +1,5 @@
+# @package _global_
+
+# hydra:
+#   run:
+#     dir: logs/experiments/runs/${name}/${workdir_lookup:${job_id}}

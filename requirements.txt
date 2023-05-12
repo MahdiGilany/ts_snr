@@ -21,3 +21,5 @@ albumentations
 scp 
 transformers
 nlp-uncertainty-zoo # for sngp
+optuna
+hydra-optuna-sweeper

@@ -33,7 +33,6 @@ driver:
 
     logger:
       wandb:
-        # tags: [""]
         entity: mahdigilany
         project: IJCARS
 

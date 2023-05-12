@@ -77,6 +77,7 @@ def named_checkpoint(name):
 def eval_str(arithmetics: str):
     return eval(arithmetics)
 
+
 @register_resolver
 def uuid():
     import uuid
