@@ -20,7 +20,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import logging
 from rich.logging import RichHandler
 from src.modeling.vicreg import VICReg
-from src.modeling.registry.registry import create_model
+from modeling.registry.module_registry import create_model
 from src.data.registry import create_dataset
 from pl_bolts.optimizers.lr_scheduler import LinearWarmupCosineAnnealingLR
 from src.utils.driver.stateful import StatefulCollection

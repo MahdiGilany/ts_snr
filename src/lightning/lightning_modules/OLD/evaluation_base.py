@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Literal
-from src.typing import SupportsDatasetNameConvention
+from utils.typing import SupportsDatasetNameConvention
 import pytorch_lightning as pl
 from torchmetrics.classification.accuracy import Accuracy
 import torch

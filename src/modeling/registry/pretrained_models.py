@@ -27,7 +27,7 @@ def register_pretrained_model(
     """
 
     # make sure the model can be instantiated
-    from src.modeling.registry.registry import _MODELS
+    from modeling.registry.module_registry import _MODELS
 
     assert architecture_name in _MODELS, f"Model {architecture_name} not registered"
     try:

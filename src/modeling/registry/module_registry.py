@@ -1170,7 +1170,7 @@ def core_classifier(seed, split_seed):
     path = get_named_checkpoint(_seeds_to_core_clf_checkpoint_name(seed, split_seed))
     sd = torch.load(path)
 
-    from modeling.registry.registry import create_model
+    from modeling.registry.module_registry import create_model
 
     feat_extractor = create_model("resnet10_feature_extractor")
 
@@ -1249,7 +1249,7 @@ def core_classifier_no_pos_emb():
     path = get_named_checkpoint("core_clf_ssd_2_gsd_0_nopos_emb_core_mixing")
     sd = torch.load(path)
 
-    from modeling.registry.registry import create_model
+    from modeling.registry.module_registry import create_model
 
     feat_extractor = create_model("resnet10_feature_extractor")
 

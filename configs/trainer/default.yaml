@@ -1,0 +1,9 @@
+accelerator: gpu
+devices: 1
+
+min_epochs: 1
+max_epochs: 100
+
+limit_train_batches: null
+
+resume_from_checkpoint: null

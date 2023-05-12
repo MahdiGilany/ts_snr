@@ -1,7 +1,7 @@
 import pytorch_lightning as pl
 from src.modeling.optimizer_factory import OptimizerConfig, configure_optimizers
 from hydra.utils import instantiate
-from src.typing import FeatureExtractionProtocol
+from utils.typing import FeatureExtractionProtocol
 from torchmetrics import Accuracy, AUROC
 from src.modeling.mlp import MLPClassifier, MLPRegressor
 import torch

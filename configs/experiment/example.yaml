@@ -1,0 +1,39 @@
+# @package _global_
+
+defaults:
+  - /driver: train
+  - override /model@driver.config.model: supervised_sngp
+
+
+name: "sngp_uva_lightning_ndl_wide_resnet"
+seed: 0
+split_seed: 0 
+
+driver:
+  config:
+    trainer:
+      num_sanity_val_steps: 0
+      # max_epochs: 30
+
+    datamodule:
+      patch_view_config:
+        needle_region_only: True
+        prostate_region_only: False
+      splits:
+        test_as_val: True
+        cohort_specifier: ["UVA"]
+        train_val_ratio: 0.2
+      loader_config:
+        batch_size: 32
+
+          
+    model:
+      backbone_name: sngp_wide_resnet
+
+
+    logger:
+      wandb:
+        # tags: [""]
+        entity: mahdigilany
+        project: IJCARS
+

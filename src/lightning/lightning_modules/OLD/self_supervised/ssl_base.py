@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from typing import Any, List, Sequence
-from src.typing import SupportsDatasetNameConvention
+from utils.typing import SupportsDatasetNameConvention
 
 from ....typing import FeatureExtractionProtocol
 from ..configure_optimizer_mixin import ConfigureOptimizersMixin, OptimizerConfig
