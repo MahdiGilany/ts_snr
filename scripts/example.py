@@ -36,7 +36,6 @@ from src.utils import driver as utils
 # from pytorch_lightning import seed_everything
 
 
-
 def main():
     log = utils.get_logger(__name__)
 
