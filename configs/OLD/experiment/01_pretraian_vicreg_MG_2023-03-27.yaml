@@ -1,0 +1,42 @@
+# @package _global_
+
+# defaults:
+  # - /driver: 
+
+
+name: "pretrain_spectral_resnet10_uva600_prst_stride(3,3)_no_batchnorm"
+seed: 0
+split_seed: 0 # not working for now
+
+batch_size: 32
+num_epochs: 30
+num_classes: 2
+
+
+data:
+  dataset_name: exact_patches_ssl_uva600_centers_balanced_prst_instanceNorm
+  num_workers: 4
+
+model:
+  backbone_name: spectral_resnet10_feature_extractor
+  # backbone_name: spectral_resnet18_feature_extractor
+  backbone_configs:
+    spectral_norm: True
+    spectral_config:
+      input_size: 256
+      coefficient: 1.
+      n_power_iterations: 1
+
+
+optimizer:
+  # optimizer_name: adam
+  lr: 0.0001
+  weight_decay: 1e-6
+
+
+logger:
+  wandb:
+    # tags: [""]
+    entity: mahdigilany
+    project: IJCARS
+    id: 0

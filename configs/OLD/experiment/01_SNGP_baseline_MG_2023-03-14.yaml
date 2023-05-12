@@ -1,0 +1,56 @@
+# @package _global_
+
+# defaults:
+  # - /driver: train
+
+
+name: "sngp_resnet10_uva600_ndl&prst_nospectral_batchnorm"
+seed: 0
+split_seed: 0 # not working for now
+
+batch_size: 32
+num_epochs: 30
+num_classes: 2
+
+loss_name: crossentropy_loss
+
+freeze_backbone: False
+
+data:
+  dataset_name: exact_patches_sl_uva600_centers_balanced_ndl_prst_instanceNorm
+  # dataset_name: exact_patches_sl_all_centers_balanced_ndl_instanceNorm
+  # dataset_name: exact_patches_sl_uva_centers_balanced_ndl_instanceNorm
+  num_workers: 4
+
+model:
+  # model_name: resnet10_feature_extractor
+  # model_name: spectral_resnet10_feature_extractor
+  # model_name: spectral_resnet18_feature_extractor
+  model_name: sngp_resnet10
+  # model_name: sngp_resnet10_vicreg_pretrained
+  # model_name: sngp_resnet10_vicreg_pretrained_extra_lin
+  # model_name: spectral_resnet10_vicreg_pretrained_lin_eval
+  
+  num_deep_features: 512 
+  num_gp_features: 128
+  mean_field_factor: 25
+  spectral_norm: True
+  spectral_config:
+    input_size: 256
+    coefficient: 1.
+    n_power_iterations: 1
+
+
+
+optimizer:
+  # optimizer_name: adam
+  lr: 0.0001
+  weight_decay: 1e-6
+
+
+logger:
+  wandb:
+    # tags: [""]
+    entity: mahdigilany
+    project: IJCARS
+    id: 0
