@@ -24,3 +24,4 @@ nlp-uncertainty-zoo # for sngp
 optuna
 hydra-optuna-sweeper
 darts
+statsforecast==1.4 # very important to handle package conflicts
