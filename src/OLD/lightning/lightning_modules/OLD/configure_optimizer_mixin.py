@@ -78,7 +78,8 @@ class ConfigureOptimizersMixin(ABC):
     and `num_epochs` properties
     """
 
-    def set_optimizer_configs(self, cfg: OptimizerConfig):
+    def set_optimizer_conf
+    igs(self, cfg: OptimizerConfig):
         self._opt_cfg = cfg
 
     @abstractproperty

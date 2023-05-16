@@ -1,3 +1,4 @@
+# author: Alex Pashevish
 import torch
 import wandb
 import numpy as np
@@ -21,6 +22,51 @@ from darts.models.forecasting.torch_forecasting_model import (
 from tsf import constants, utils
 from tsf.transformers import NewTransformerModel, AutoformerModel, FEDformerModel
 from tactis.darts.model import TACTiSModel
+
+from abc import ABC, abstractmethod
+
+
+
+@dataclass
+class OptimizerConfig:
+    lr: float = 1e-3,
+    weight_decay: float = 0.0,
+    early_stopping: bool = True,
+    loss_fn: str = 'mae',
+
+class BaseTimeSeries(ABC):
+    def __init__(
+        self,
+        callbacks,
+        force_reset,
+        covariate_config,
+        epochs: int = 100,
+        batch_size: int = 32,
+        opt_config: dict = None,
+        ) -> None:
+        pass
+
+    @abstractmethod
+    def fit(self, train_series, **kwargs):
+        ...
+        
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 def fixed_hyperparams(model_name, input_length, output_length):
