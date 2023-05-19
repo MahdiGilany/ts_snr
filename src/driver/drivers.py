@@ -1,0 +1,154 @@
+import sys
+import os
+
+# sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/../")
+
+import random
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+
+import wandb
+from hydra import compose, initialize
+from hydra.utils import instantiate
+from omegaconf import DictConfig, OmegaConf
+
+from src.utils import driver as utils
+
+
+log = utils.get_logger(__name__)
+
+
+def train_model():
+    ...
+
+
+def eval_model():
+    ...
+    
+
+def simple_run(configs: DictConfig):
+    """function supposed to be used for simple runs with torch and without lightning. 
+    Not complete yet.
+
+    Args:
+        configs (DictConfig): _description_
+    """
+    # fix seed
+    if (s := configs.get("seed")) is not None:
+        log.info(f"Global seed set to {s}")
+        random.seed(s)
+        np.random.seed(s)
+        torch.manual_seed(s)
+        torch.cuda.manual_seed_all(s)
+    
+    
+    # initialize wandb
+    wandb_config = OmegaConf.to_container(
+        configs, resolve=True, throw_on_missing=True
+    )
+    wandb.init(
+        project=configs.logger.wandb.project,
+        entity=configs.logger.wandb.entity,
+        config=wandb_config, # saves all configs
+        name=configs.name,
+        group=configs.logger.wandb.group, # group name
+        job_type=None, # type of run for grouping like train or eval
+        dir=None,
+        save_code=True,
+        resume=None, # overwriting when id is same
+        )
+        
+    # instantiate datamodule
+    
+    
+    # instantiate model 
+
+
+    # train_model()
+    
+    
+    # eval_model()
+    
+    
+    # finish wandb
+    wandb.finish()
+    return
+
+
+def darts_lightning_driver_run(configs: DictConfig):
+    """Driver function for darts models with pytorch lightning.
+    fixes seeds, instantiates datamodule, model, logger, trainer, callbacks, etc. and trains the model using model.fit().
+
+    Args:
+        configs (DictConfig): all the configs coming from hydra.
+    """
+    
+    # fix seed
+    if (s := configs.get("seed")) is not None:
+        log.info(f"Global seed set to {s}")
+        random.seed(s)
+        np.random.seed(s)
+        torch.manual_seed(s)
+        torch.cuda.manual_seed_all(s)
+    
+    
+    # pl_trainer_kwargs
+    pl_trainer_kwargs = {}
+    pl_trainer_kwargs.update(configs.trainer)
+    
+    
+    # init lightning logger    
+    if "logger" in configs:
+        from pytorch_lightning.loggers import WandbLogger
+        lg_conf = dict(configs.logger.wandb)
+        log.info(f"Instantiating logger <{configs.logger.wandb._target_}>")
+
+        _config = OmegaConf.to_container(
+            configs, resolve=True, throw_on_missing=True
+            )
+        lg_conf.pop("_target_")
+        logger = WandbLogger(**lg_conf, config=_config) # saves all configs
+        # logger = instantiate(configs.logger, config=_config) # saves all configs
+        pl_trainer_kwargs["logger"] = logger
+    
+    
+    # loading data
+    log.info(f"Instantiating data <{configs.data._target_}>")
+    train_series, val_series, *scaler = instantiate(configs.data)
+    
+    # instantiate darts model 
+    log.info(f"Instantiating model <{configs.model._target_}>")
+    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs)
+    
+
+    # train model
+    log.info("Training model")
+    model.fit(train_series, epochs=configs.epochs, verbose=True, num_loader_workers=0, val_series=None)
+    
+    
+    # eval model
+    pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
+    pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series
+    train_series = scaler[0].inverse_transform(train_series) if scaler else train_series
+    
+    
+    from darts.metrics import mape
+    print(
+        "Mean absolute percentage error: {:.2f}%.".format(
+            mape(val_series, pred_series)
+            )
+        )
+    
+    # plot
+    plt.figure(figsize=(10, 6))
+    train_series.plot(label="train")
+    val_series.plot(label="val")
+    pred_series.plot(label="pred")
+    plt.savefig('pred.png')
+    
+    # finish wandb
+    wandb.finish()
+    return

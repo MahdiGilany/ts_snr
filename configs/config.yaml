@@ -17,8 +17,8 @@
 # It mainly configures hydra defaults, and assigns a name to the experiment.
 defaults:
   - _self_
-  - log_dir: default
-  - driver: default
+  - log_dir: logdir_default
+  - driver: pl_driver_default
   - experiment: null
 
   # optional local config for machine/user specific settings
@@ -26,13 +26,18 @@ defaults:
   - optional local: default.yaml
 
   # enable color logging
-  - override hydra/hydra_logging: colorlog
-  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: default # colorlog
+  - override hydra/job_logging: default # colorlog
   # - override hydra/sweeper: optuna
   
 # default name for the experiment, determines logging folder path
 # (you can overwrite this name in experiment configs)
-name: default
+name: name_of_experiment
+
+seed: 0
+batch_size: 32
+epochs: 50
+
 resume_id: ${oc.env:RESUME_ID,null} # if you set RUN_ID it may be used to resume previous runs
 id: 0 # unique id for this run
 # id: ${uuid:} # unique id for this run

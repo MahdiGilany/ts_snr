@@ -1,0 +1,20 @@
+accelerator: auto
+devices: 1 # number of gpus
+num_nodes: 1 
+
+# fast_dev_run: True # compiles the code for errors like train_step, val_step, test_step, etc.  
+
+# min_epochs: 1
+max_epochs: ${epochs} # num_epochs
+
+limit_train_batches: null
+
+check_val_every_n_epoch: 1
+num_sanity_val_steps: null
+enable_checkpointing: null
+enable_model_summary: null
+
+accumulate_grad_batches: 1 # calling optimizer.step() for every n batches
+
+# callbacks: # added separately in driver
+# logger: # added separately in driver

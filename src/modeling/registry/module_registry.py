@@ -16,18 +16,18 @@ from timm.models.layers.helpers import to_2tuple
 from timm.models.swin_transformer import _create_swin_transformer
 from timm.models.vision_transformer import _create_vision_transformer
 
-from ..resnets import resnet10 as _create_resnet10
-from ..resnets import resnet18 as _create_resnet18
-from ..resnets import resnet50 as _create_resnet50
-from ..resnets import resnet_feature_extractor
+from ..modules.resnets import resnet10 as _create_resnet10
+from ..modules.resnets import resnet18 as _create_resnet18
+from ..modules.resnets import resnet50 as _create_resnet50
+from ..modules.resnets import resnet_feature_extractor
 
-from ..spectral_resnets import spectral_resnet10 as _create_spectral_resnet10
-from ..spectral_resnets import spectral_resnet18 as _create_spectral_resnet18
-from ..spectral_resnets import spectral_resnet_feature_extractor
-from ..GP_approx_models import Laplace
+from ..modules.spectral_resnets import spectral_resnet10 as _create_spectral_resnet10
+from ..modules.spectral_resnets import spectral_resnet18 as _create_spectral_resnet18
+from ..modules.spectral_resnets import spectral_resnet_feature_extractor
+from ..modules.GP_approx_models import Laplace
 
-from ..attention import MultiheadAttention, AttentionMIL, GatedAttentionMIL
-from ..simple_dense_net import SimpleAggregNet
+from ..modules.attention import MultiheadAttention, AttentionMIL, GatedAttentionMIL
+from ..modules.simple_dense_net import SimpleAggregNet
 
 
 _MODELS = {}

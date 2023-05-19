@@ -1,0 +1,16 @@
+# https://wandb.ai
+
+wandb:
+  _target_: pytorch_lightning.loggers.wandb.WandbLogger
+  project: ts_snr
+  entity: mahdigilany
+  name: ${name}
+  group: null
+  # id: ${id}  # set to a specific id to continue an experiment
+  # log_model: False
+  prefix: ""
+  job_type: null
+  tags: []
+  save_code: True
+  dir: null
+  resume: null

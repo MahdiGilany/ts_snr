@@ -1,0 +1,16 @@
+
+# @package _global_
+# first line means that this config is for global use, e.g., configs.logger instead of configs.driver.logger
+_recursive_: false # recursive instantiation while using hydra.util.instantiate. 
+#https://hydra.cc/docs/advanced/instantiate_objects/overview/#recursive-instantiation 
+
+defaults:
+  - /model: model_default
+  - /data: data_default
+  - /trainer: trainer_default
+  # - /logger: wandb_lightning # / "slash" is for recognizing logger folder in previous folder 
+
+  # - /datamodule@config.datamodule: sl_datamodule
+  # - /callbacks@config.callbacks: finetune.yaml
+  # - /trainer@config.trainer: default.yaml
+  # - /model@config.model: supervised

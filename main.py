@@ -9,7 +9,7 @@ from rich import print as pprint
 from omegaconf import OmegaConf
 import logging
 from src.config import initialize
-import scripts.drivers as drivers
+import src.driver.drivers as drivers
 
 from torch.multiprocessing import set_sharing_strategy
 
@@ -50,7 +50,7 @@ def main(config):
     # config = maybe_resume_previous_run(config)
     pprint(OmegaConf.to_object(config))
 
-    out = drivers.simple_run(config) # we can instantiate driver instead later
+    out = drivers.darts_lightning_driver_run(config) # we can instantiate driver instead later
 
     return out
 

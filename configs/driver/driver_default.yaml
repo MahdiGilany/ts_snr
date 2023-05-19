@@ -1,5 +1,6 @@
 
 # @package _global_
+# first line means that this config is for global use, e.g., configs.logger instead of configs.driver.logger
 _recursive_: false # recursive instantiation while using hydra.util.instantiate. 
 #https://hydra.cc/docs/advanced/instantiate_objects/overview/#recursive-instantiation 
 
