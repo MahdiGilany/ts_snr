@@ -1,0 +1,13 @@
+_target_: src.driver.pytorch_lightning_experiment.FinetuningDriver
+_recursive_: false
+
+defaults:
+  - /datamodule@config.datamodule: gmm_based_datamodule
+  - /model@config.model: selfsemi_oneGMM
+  - /callbacks@config.callbacks: finetune
+  - /logger@config.logger: wandb 
+  - /trainer@config.trainer: default
+
+config:
+  trainer:
+    reload_dataloaders_every_n_epochs: ${driver.config.model.GMM_cycle}

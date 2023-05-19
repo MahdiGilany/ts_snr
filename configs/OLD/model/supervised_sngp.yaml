@@ -1,7 +1,0 @@
-defaults:
- - supervised
-
-
-_target_: src.lightning.lightning_modules.supervised.supervised_patch_model.SupervisedSNGPModel
-backbone_name: sngp_resnet10
-

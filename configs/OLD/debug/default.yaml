@@ -1,7 +1,0 @@
-# @package _global_ 
-
-driver: 
-  config: 
-    logger: 
-      wandb: 
-        project: Exact_IPCAI_Debug

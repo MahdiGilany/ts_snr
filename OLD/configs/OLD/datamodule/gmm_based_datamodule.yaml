@@ -1,0 +1,8 @@
+
+# TODO this is not tested
+
+defaults:
+  - /datamodule: semi_sup_datamodule
+  - override /transform@patch_transform_train: default
+
+_target_: src.lightning.datamodules.exact_datamodule.PatchDataModuleForSemiSupervisedLearningFahimeh

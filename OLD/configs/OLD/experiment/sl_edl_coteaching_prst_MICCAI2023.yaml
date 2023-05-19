@@ -1,0 +1,45 @@
+# @package _global_
+
+defaults:
+  - /driver: train
+  - override /model@driver.config.model: edl_coteaching
+  - override /datamodule@driver.config.datamodule: semi_sup_datamodule
+
+
+name: "sl-prst_crsEnt-no-coteaching_UVA600CRCEO428-pretrn-all-centrs_lin-eval_eval-called"
+seed: 0
+split_seed: 2
+
+driver:
+  config:
+    trainer:
+      num_sanity_val_steps: 0  
+
+    datamodule:
+      patch_view_config:
+        needle_region_only: False
+        # prostate_region_only: true
+      splits:
+        cohort_specifier: [UVA600, CRCEO428]
+        test_as_val: True
+
+    model: 
+      model1: 
+        model_name: resnet10_pretrn_allcntrs_rand_init_lin
+        # model_name: finetune_linear_all_centers_froz_backbone
+        split_seed: ${split_seed}
+      model2: 
+        model_name: resnet10_pretrn_allcntrs_rand_init_lin
+        # model_name: finetune_linear_all_centers_froz_backbone
+        split_seed: ${eval_str:'${split_seed}'}
+      loss_name: crossentropy_loss
+      # semi_sup: False
+      final_remember_rate: 1
+      # final_remember_rate_epoch_frac: 0.1
+
+
+    logger:
+      wandb:
+        tags: ["MICCAI2023", "edl+coteaching_all_prostate"]
+        entity: mahdigilany
+        project: MICCAI2023
