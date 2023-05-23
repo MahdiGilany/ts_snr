@@ -102,17 +102,18 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # init lightning logger    
     if "logger" in configs:
-        from pytorch_lightning.loggers import WandbLogger
-        lg_conf = dict(configs.logger.wandb)
-        log.info(f"Instantiating logger <{configs.logger.wandb._target_}>")
+        if configs.logger is not None:
+            from pytorch_lightning.loggers import WandbLogger
+            lg_conf = dict(configs.logger.wandb)
+            log.info(f"Instantiating logger <{configs.logger.wandb._target_}>")
 
-        _config = OmegaConf.to_container(
-            configs, resolve=True, throw_on_missing=True
-            )
-        lg_conf.pop("_target_")
-        logger = WandbLogger(**lg_conf, config=_config) # saves all configs
-        # logger = instantiate(configs.logger, config=_config) # saves all configs
-        pl_trainer_kwargs["logger"] = logger
+            _config = OmegaConf.to_container(
+                configs, resolve=True, throw_on_missing=True
+                )
+            lg_conf.pop("_target_")
+            logger = WandbLogger(**lg_conf, config=_config) # saves all configs
+            # logger = instantiate(configs.logger, config=_config) # saves all configs
+            pl_trainer_kwargs["logger"] = logger
     
     
     # loading data
@@ -121,21 +122,38 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # instantiate darts model 
     log.info(f"Instantiating model <{configs.model._target_}>")
-    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs)
+    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs,)# torch_metrics=DEFINED METRICS) # pl_module_params
+    
+    # check model type
+    from darts.models.forecasting.pl_forecasting_module import PLForecastingModule
+    from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel
+    if isinstance(model, PLForecastingModule) == False:
+        raise ValueError("Model must be a subclass of PLForecastingModule")
+    if isinstance(model, TorchForecastingModel):
+        raise ValueError("Model must not be a subclass of TorchForecastingModel")
     
 
     # train model
     log.info("Training model")
-    model.fit(train_series, epochs=configs.epochs, verbose=True, num_loader_workers=0, val_series=None)
+    model.fit(
+        train_series,
+        epochs=configs.epochs,
+        verbose=True,
+        num_loader_workers=0,
+        val_series=val_series
+        ) # trainer
     
     
-    # eval model
+    # eval model #TODO needs work
+    log.info("Evaluating model")
     pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
     pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series
     train_series = scaler[0].inverse_transform(train_series) if scaler else train_series
     
     
+    # TODO: needs work
     from darts.metrics import mape
+    
     print(
         "Mean absolute percentage error: {:.2f}%.".format(
             mape(val_series, pred_series)

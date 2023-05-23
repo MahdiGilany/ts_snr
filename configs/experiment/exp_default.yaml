@@ -3,10 +3,22 @@
 # defaults:
   # - 
   
-name: "setting up with code"
+name: "setting up with code with val"
 seed: 0
+batch_size: 32
+epochs: 50
+
+# uncomment to change the defaults
+# model:
+#   model_name: nbeats
+#   input_chunk_length: 24
+#   output_chunk_length: 12
+
+# data:
+#   noise_mean: 0
+  # noise_std: 0
 
 logger:
   wandb:
     project: ts_snr
-    # entity: borealisai
+    ## entity: borealisai

@@ -46,7 +46,7 @@ def create_noisy_dataset(
 
 @register_dataset
 def air_passengers(
-    split_ratio: float,
+    split_ratio: float = 0.75,
     use_scaler: bool = True,
     **kwargs
     ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:

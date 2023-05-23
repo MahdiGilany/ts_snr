@@ -12,6 +12,9 @@ from src.config import initialize
 import src.driver.drivers as drivers
 
 from torch.multiprocessing import set_sharing_strategy
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 set_sharing_strategy("file_system")
