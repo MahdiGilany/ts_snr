@@ -18,7 +18,7 @@ epochs: 50
 #   noise_mean: 0
   # noise_std: 0
 
-logger:
+logger: #null
   wandb:
     project: ts_snr
-    ## entity: borealisai
+    # entity: borealisai

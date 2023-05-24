@@ -120,18 +120,25 @@ def darts_lightning_driver_run(configs: DictConfig):
     log.info(f"Instantiating data <{configs.data._target_}>")
     train_series, val_series, *scaler = instantiate(configs.data)
     
+    
+    # metrics
+    log.info(f"Preparing metrics")
+    from torchmetrics import MetricCollection, MeanAbsolutePercentageError
+    mape = MeanAbsolutePercentageError()
+    metrics = MetricCollection([mape])
+    
+    
     # instantiate darts model 
     log.info(f"Instantiating model <{configs.model._target_}>")
-    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs,)# torch_metrics=DEFINED METRICS) # pl_module_params
+    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs, save_checkpoints=False, torch_metrics=metrics) # save_checkpoints=True
+    
     
     # check model type
     from darts.models.forecasting.pl_forecasting_module import PLForecastingModule
     from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel
-    if isinstance(model, PLForecastingModule) == False:
-        raise ValueError("Model must be a subclass of PLForecastingModule")
-    if isinstance(model, TorchForecastingModel):
+    if isinstance(model, TorchForecastingModel) == False:
         raise ValueError("Model must not be a subclass of TorchForecastingModel")
-    
+
 
     # train model
     log.info("Training model")
@@ -140,7 +147,7 @@ def darts_lightning_driver_run(configs: DictConfig):
         epochs=configs.epochs,
         verbose=True,
         num_loader_workers=0,
-        val_series=val_series
+        val_series=val_series #TODO: does it get normalized?
         ) # trainer
     
     
@@ -165,7 +172,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     train_series.plot(label="train")
     val_series.plot(label="val")
     pred_series.plot(label="pred")
-    plt.savefig('pred.png')
+    # plt.savefig('pred.png')
     
     # finish wandb
     wandb.finish()
