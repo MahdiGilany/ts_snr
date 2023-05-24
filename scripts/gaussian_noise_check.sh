@@ -7,7 +7,7 @@ do
  echo "seed ${seed} and noise std ${noise_std} main experiment exp_default"
  python main.py experiment=exp_default seed=${seed}\
  data.noise_std=${noise_std}\
- name="nbeats_airpassenger_noisestd${noise_std}_seed${seed}"\
- logger.wandb.group=noise_std${noise_std}
+ name="nbeats_airpassenger_noisestd${noise_std}_seed${seed}_v1"\
+ logger.wandb.group=noise_std${noise_std}_v1
  done
 done

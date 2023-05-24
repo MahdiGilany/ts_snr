@@ -9,6 +9,7 @@ defaults:
   - /data: data_default
   - /trainer: trainer_default
   - /logger: wandb_lightning # / "slash" is for recognizing logger folder in previous folder 
+  - /callbacks: callbacks_default
 
   # - /datamodule@config.datamodule: sl_datamodule
   # - /callbacks@config.callbacks: finetune.yaml

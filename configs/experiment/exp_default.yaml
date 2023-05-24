@@ -3,12 +3,15 @@
 # defaults:
   # - 
   
-name: "setting up with code with val"
+name: "setting_up_loading"
 seed: 0
 batch_size: 32
 epochs: 50
 
 # uncomment to change the defaults
+trainer:
+  check_val_every_n_epoch: 5
+
 # model:
 #   model_name: nbeats
 #   input_chunk_length: 24
@@ -17,6 +20,10 @@ epochs: 50
 # data:
 #   noise_mean: 0
   # noise_std: 0
+
+callbacks: 
+  model_checkpoint:
+    every_n_epochs: 1
 
 logger: #null
   wandb:

@@ -9,11 +9,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+from typing import List, Optional
 
 import wandb
 from hydra import compose, initialize
 from hydra.utils import instantiate
 from omegaconf import DictConfig, OmegaConf
+from pytorch_lightning import Callback
 
 from src.utils import driver as utils
 
@@ -100,6 +102,18 @@ def darts_lightning_driver_run(configs: DictConfig):
     pl_trainer_kwargs.update(configs.trainer)
     
     
+    # init lightning callbacks
+    pl_trainer_kwargs["callbacks"]: List[Callback] = []
+    if "callbacks" in configs:
+        if configs.callbacks is not None:
+            pl_trainer_kwargs["enable_checkpointing"] = True
+            for _, cb_conf in configs.callbacks.items():
+                if "_target_" in cb_conf:
+                    log.info(f"Instantiating callback <{cb_conf._target_}>")
+                    pl_trainer_kwargs["callbacks"].append(instantiate(cb_conf))
+
+    
+    
     # init lightning logger    
     if "logger" in configs:
         if configs.logger is not None:
@@ -121,7 +135,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     train_series, val_series, *scaler = instantiate(configs.data)
     
     
-    # metrics
+    # defining metrics
     log.info(f"Preparing metrics")
     from torchmetrics import MetricCollection, MeanAbsolutePercentageError
     mape = MeanAbsolutePercentageError()
@@ -130,7 +144,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # instantiate darts model 
     log.info(f"Instantiating model <{configs.model._target_}>")
-    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs, save_checkpoints=False, torch_metrics=metrics) # save_checkpoints=True
+    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs, torch_metrics=metrics, save_checkpoints=False)
     
     
     # check model type
@@ -153,6 +167,8 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # eval model #TODO needs work
     log.info("Evaluating model")
+    model.model.load_from_checkpoint(f"./checkpoints/{configs.name}.ckpt") # TODO: needs work
+    
     pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
     pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series
     train_series = scaler[0].inverse_transform(train_series) if scaler else train_series
@@ -160,12 +176,15 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # TODO: needs work
     from darts.metrics import mape
-    
+    mape_result = mape(val_series, pred_series)
     print(
         "Mean absolute percentage error: {:.2f}%.".format(
-            mape(val_series, pred_series)
+            mape_result
             )
         )
+    
+    
+    wandb.log({"val_best_mape": np.array(mape_result)})
     
     # plot
     plt.figure(figsize=(10, 6))
