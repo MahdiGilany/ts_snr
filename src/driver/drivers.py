@@ -191,6 +191,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     train_series.plot(label="train")
     val_series.plot(label="val")
     pred_series.plot(label="pred")
+    wandb.log({"Media": plt})
     # plt.savefig('pred.png')
     
     # finish wandb

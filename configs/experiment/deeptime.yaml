@@ -4,6 +4,7 @@ defaults:
   - exp_default
   
 name: "deeptime_airpassenger"
+epoch: 2000
 
 model:
   model_name: deeptime
