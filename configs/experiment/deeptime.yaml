@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - exp_default
+  
+name: "deeptime_airpassenger"
+
+model:
+  model_name: deeptime
+
+logger:
+  wandb:
+    project: ts_snr
+    entity: borealisai
