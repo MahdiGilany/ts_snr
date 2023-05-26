@@ -37,7 +37,9 @@ name: name_of_experiment
 seed: 0
 batch_size: 32
 epochs: 50
+save_checkpoints: True
 
+new_dir: False # if True, creates a new directory for this run with the same experiment name
 resume_id: ${oc.env:RESUME_ID,null} # if you set RUN_ID it may be used to resume previous runs
 id: 0 # unique id for this run
 # id: ${uuid:} # unique id for this run

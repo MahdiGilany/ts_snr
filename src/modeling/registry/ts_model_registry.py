@@ -14,7 +14,7 @@ def create_model(model_name, **kwargs):
     if model_name not in _MODELS:
         raise ValueError(f"Model <{model_name}> not registered.")
 
-    return _MODELS[model_name](**kwargs)
+    return _MODELS[model_name](model_name=model_name, **kwargs)
 
 
 def list_models():

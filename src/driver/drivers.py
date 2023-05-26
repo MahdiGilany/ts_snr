@@ -144,14 +144,13 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # instantiate darts model 
     log.info(f"Instantiating model <{configs.model._target_}>")
-    model = instantiate(configs.model, pl_trainer_kwargs=pl_trainer_kwargs, torch_metrics=metrics, save_checkpoints=False)
-    
-    
-    # check model type
-    from darts.models.forecasting.pl_forecasting_module import PLForecastingModule
     from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel
-    if isinstance(model, TorchForecastingModel) == False:
-        raise ValueError("Model must not be a subclass of TorchForecastingModel")
+    model: TorchForecastingModel = instantiate(
+        configs.model,
+        pl_trainer_kwargs=pl_trainer_kwargs,
+        torch_metrics=metrics,
+        save_checkpoints=configs.save_checkpoints,
+        )
 
 
     # train model
@@ -161,13 +160,13 @@ def darts_lightning_driver_run(configs: DictConfig):
         epochs=configs.epochs,
         verbose=True,
         num_loader_workers=0,
-        val_series=val_series #TODO: does it get normalized?
+        val_series=val_series,
         ) # trainer
     
     
     # eval model #TODO needs work
     log.info("Evaluating model")
-    model.model.load_from_checkpoint(f"./checkpoints/{configs.name}.ckpt") # TODO: needs work
+    model.load_from_checkpoint(model_name=configs.name) # TODO: needs work
     
     pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
     pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series

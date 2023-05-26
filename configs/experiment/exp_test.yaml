@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - exp_default
+  
+name: "deeptime_airpassenger_test"
+epochs: 5
+save_checkpoints: False
+
+model:
+  model_name: deeptime
+
+logger: null

@@ -5,6 +5,6 @@
 
 hydra:
   run:
-    dir: ${workdir_lookup:${name},${resume_id}}    
+    dir: ${workdir_lookup:${name},${resume_id},${new_dir}}    
   #  dir: logs/experiments/multiruns/${name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   #  subdir: .

@@ -1,14 +1,14 @@
-model_checkpoint:
-    _target_: pytorch_lightning.callbacks.ModelCheckpoint
-    monitor: val_MeanAbsolutePercentageError # name of the logged metric which determines when model is improving
-    mode: "min" # "max" means higher metric value is better, can be also "min"
-    save_top_k: 1 # save k best models (determined by above metric)
-    save_last: true # additionaly always save model from last epoch
-    verbose: false
-    dirpath: "checkpoints/"
-    filename: ${name} # "epoch_{epoch:03d}" 
-    auto_insert_metric_name: false
-    every_n_epochs: 5
+# model_checkpoint:
+#     _target_: pytorch_lightning.callbacks.ModelCheckpoint
+#     monitor: val_MeanAbsolutePercentageError # name of the logged metric which determines when model is improving
+#     mode: "min" # "max" means higher metric value is better, can be also "min"
+#     save_top_k: 1 # save k best models (determined by above metric)
+#     save_last: true # additionaly always save model from last epoch
+#     verbose: false
+#     dirpath: "checkpoints/"
+#     filename: ${name} # "epoch_{epoch:03d}" 
+#     auto_insert_metric_name: false
+#     every_n_epochs: 5
 
 
 # model_summary:
