@@ -6,6 +6,7 @@ from typing import List, NewType, Tuple, Union
 
 import numpy as np
 import torch
+from torch import Tensor
 import torch.nn as nn
 
 from einops import rearrange, repeat, reduce
@@ -13,14 +14,14 @@ from ..modules.inr import INR
 from ..modules.regressors import RidgeRegressor
 
 from darts.logging import get_logger, raise_if_not, raise_log
-from darts.models.forecasting.pl_forecasting_module import PLPastCovariatesModule
+from darts.models.forecasting.pl_forecasting_module import PLForecastingModule, PLPastCovariatesModule
 from darts.models.forecasting.torch_forecasting_model import PastCovariatesTorchModel
 from darts.utils.torch import MonteCarloDropout
 
 # logger = get_logger(__name__)
 
 
-class DeepTIMe(nn.Module):
+class _DeepTIMeModule(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
     def __init__(
@@ -29,9 +30,10 @@ class DeepTIMe(nn.Module):
         layer_size: int = 256,
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
-        scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100] # TODO: don't understand
+        scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        **kwargs,
         ):
-        super().__init__()
+        super().__init__(**kwargs)
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.adaptive_weights = RidgeRegressor()
@@ -67,3 +69,37 @@ class DeepTIMe(nn.Module):
     def get_coords(self, lookback_len: int, horizon_len: int) -> torch.Tensor:
         coords = torch.linspace(0, 1, lookback_len + horizon_len)
         return rearrange(coords, 't -> 1 t 1')
+    
+    
+    class DeepTIMeModel(PastCovariatesTorchModel):
+        def __init__(
+            self,
+            input_chunk_length: int,
+            output_chunk_length: int,
+            datetime_feats: int = None,
+            layer_size: int = 256,
+            inr_layers: int = 5,
+            n_fourier_feats: int = 4096,
+            scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+            **kwargs,
+            ):
+            super().__init__(**self._extract_torch_model_params(**self.model_params))
+
+            # extract pytorch lightning module kwargs
+            self.pl_module_params = self._extract_pl_module_params(**self.model_params)
+            
+            self.datetime_feats = datetime_feats
+            self.inr_layers = inr_layers
+            self.layer_size = layer_size
+            self.n_fourier_feats = n_fourier_feats
+            self.scales = scales
+            
+        def _create_model(self, train_sample: Tuple[torch.Tensor]) -> torch.nn.Module:
+            return _DeepTIMeModule(
+                datetime_feats=self.datetime_feats,
+                layer_size=self.layer_size,
+                inr_layers=self.inr_layers,
+                n_fourier_feats=self.n_fourier_feats,
+                scales=self.scales,
+                **self.pl_module_params,
+                )

@@ -2,5 +2,5 @@ _target_: src.modeling.registry.ts_model_registry.create_model
 model_name: nbeats
 input_chunk_length: 24
 output_chunk_length: 12
-random_state: ${seed}
+random_state: ${seed} # randomness in weight initializations
 batch_size: ${batch_size}
