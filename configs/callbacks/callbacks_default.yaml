@@ -3,13 +3,12 @@ model_checkpoint:
     monitor: val_MeanAbsolutePercentageError # name of the logged metric which determines when model is improving
     mode: "min" # "max" means higher metric value is better, can be also "min"
     save_top_k: 1 # save k best models (determined by above metric)
-    save_last: True # additionaly always save model from last epoch
-    verbose: False
+    save_last: true # additionaly always save model from last epoch
+    verbose: false
     dirpath: "checkpoints/"
-    filename: ${name} #"epoch_{epoch:03d}"
-    auto_insert_metric_name: False
-    every_n_epochs: 10
-
+    filename: ${name} # "epoch_{epoch:03d}" 
+    auto_insert_metric_name: false
+    every_n_epochs: 5
 
 
 # model_summary:
@@ -31,17 +30,6 @@ model_checkpoint:
 
 # #logger_checkpoint:
 # #  _target_: src.lightning.callbacks.wandb_checkpoint.WandbLoggerCheckpoint
-
-# model_checkpoint:
-#     _target_: pytorch_lightning.callbacks.ModelCheckpoint
-#     monitor: val/finetune_auc # name of the logged metric which determines when model is improving
-#     mode: "max" # "max" means higher metric value is better, can be also "min"
-#     save_top_k: 1 # save k best models (determined by above metric)
-#     save_last: True # additionaly always save model from last epoch
-#     verbose: False
-#     dirpath: "checkpoints/"
-#     filename: "epoch_{epoch:03d}"
-#     auto_insert_metric_name: False
 
 
 # #test_as_val_loader:

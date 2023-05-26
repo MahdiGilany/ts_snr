@@ -8,7 +8,7 @@ seed: 0
 batch_size: 32
 epochs: 50
 
-# uncomment to change the defaults
+### uncomment to change the defaults ###
 trainer:
   check_val_every_n_epoch: 5
 
@@ -21,11 +21,11 @@ trainer:
 #   noise_mean: 0
   # noise_std: 0
 
-callbacks: 
-  model_checkpoint:
-    every_n_epochs: 1
+# callbacks: 
+#   model_checkpoint:
+#     every_n_epochs: 5
 
-logger: #null
-  wandb:
-    project: ts_snr
+logger: null
+  # wandb:
+    # project: ts_snr
     # entity: borealisai

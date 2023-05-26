@@ -133,7 +133,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     # loading data
     log.info(f"Instantiating data <{configs.data._target_}>")
     train_series, val_series, *scaler = instantiate(configs.data)
-    
+     
     
     # defining metrics
     log.info(f"Preparing metrics")
