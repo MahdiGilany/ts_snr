@@ -37,8 +37,8 @@ def create_noisy_dataset(
     if use_scaler:
         scaler = Scaler()
         train_series_scaled = scaler.fit_transform(train_series)
-        # val_series_scaled = scaler.transform(val_series)
-        return train_series_scaled, val_series, scaler
+        val_series_scaled = scaler.transform(val_series)
+        return train_series_scaled, val_series_scaled, scaler
     
     return train_series, val_series
     
@@ -58,8 +58,8 @@ def air_passengers(
     if use_scaler:
         scaler = Scaler()
         train_air_scaled = scaler.fit_transform(train_air)
-        # val_air_scaled = scaler.transform(val_air)
-        return train_air_scaled, val_air, scaler
+        val_air_scaled = scaler.transform(val_air)
+        return train_air_scaled, val_air_scaled, scaler
     
     return train_air, val_air
 

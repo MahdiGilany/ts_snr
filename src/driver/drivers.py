@@ -172,7 +172,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
     pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series
     train_series = scaler[0].inverse_transform(train_series) if scaler else train_series
-    
+    val_series = scaler[0].inverse_transform(val_series) if scaler else val_series
     
     # TODO: needs work
     from darts.metrics import mape

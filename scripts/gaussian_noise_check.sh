@@ -8,6 +8,6 @@ do
  python main.py experiment=exp_default seed=${seed}\
  data.noise_std=${noise_std}\
  name="nbeats_airpassenger_noisestd${noise_std}_seed${seed}_v1"\
- logger.wandb.group=noise_std${noise_std}_v1
+ logger.wandb.group=noise_std${noise_std}_v2
  done
 done
