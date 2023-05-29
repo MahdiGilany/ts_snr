@@ -7,9 +7,13 @@
 # IT CAN BE SAFELY IGNORED.
 # To configure your experiment, you need to create a new experiment config file, 
 # in the configs/experiment folder.
-# You can use the configs/experiment/examples folder as a template.
+# You can use the configs/experiment/exp_default folder as a template.
 # Then run the program by specifying the path to your experiment config file, e.g.:
-# `python main.py experiment=examples/basic.yaml`
+# `python main.py experiment=exp_default.yaml`
+# Experiments are distinguished by their names. No runs shall have the same name,
+# unless you want to create new sub-directory under the same name by passing new_dir=True.
+# Or you want to resume the previous run with the same name accessed by passing resume_run=True.
+# This loads the latest sub-directory of the experiments with the same name.
 # *****************************
 
 # This is the top level config file for the project.
@@ -40,46 +44,16 @@ epochs: 50
 save_checkpoints: True
 
 new_dir: False # if True, creates a new directory for this run with the same experiment name
-resume_id: ${oc.env:RESUME_ID,null} # if you set RUN_ID it may be used to resume previous runs
-id: 0 # unique id for this run
+resume_run: False # if True, resumes the latest run with the same experiment name
+
+###################### not used block
+# resume_id: ${oc.env:RESUME_ID,null} # if you set RUN_ID it may be used to resume previous runs
+# id: 0 # unique id for this run
 # id: ${uuid:} # unique id for this run
 
 # path to original working directory
 # hydra hijacks working directory by changing it to the new log directory
 # https://hydra.cc/docs/next/tutorials/basic/running_your_app/working_directory
+#######################
+
 original_work_dir: ${hydra:runtime.cwd}
-
-
-# ======================= 
-# UNUSED: 
-# seed for random number generators in pytorch, numpy and python.random
-# seed: 1
-
-# checkpoint_dir: checkpoints
-
-# auto_resume: False
-# job_id: null
-
-# project: ${oc.env:PROJECT,default}
-
-
-# _target_: src.driver.pytorch_lightning_experiment.TrainingDriver
-# _recursive_: false 
-
-# defaults:
-  
-#   - /datamodule@config.datamodule: sl_datamodule
-#   - /callbacks@config.callbacks: finetune.yaml
-#   - /logger@config.logger: wandb 
-#   - /trainer@config.trainer: default.yaml
-#   - /model@config.model: supervised
-
-# config: 
-  
-#   datamodule:
-#     loader_config: 
-#       batch_size: 32
-#     splits:
-#       undersample_benign_eval: True
-  
-#   seed: ${seed}

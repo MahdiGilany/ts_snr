@@ -166,8 +166,9 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # eval model #TODO needs work
     log.info("Evaluating model")
-    model.load_from_checkpoint(model_name=configs.name) # TODO: needs work
+    model.load_from_checkpoint(model_name=configs.model.model_name) # TODO: needs work
     
+    # TODO: needs work -- should iteratre over batches in rolling way not just one series
     pred_series = model.predict(series=train_series, n=configs.model.output_chunk_length)
     pred_series = scaler[0].inverse_transform(pred_series) if scaler else pred_series
     train_series = scaler[0].inverse_transform(train_series) if scaler else train_series
@@ -182,17 +183,18 @@ def darts_lightning_driver_run(configs: DictConfig):
             )
         )
     
+    # TODO: needs work
+    if model.model.logger is not None:
+        wandb.log({"val_best_mape": np.array(mape_result)})
     
-    wandb.log({"val_best_mape": np.array(mape_result)})
-    
-    # plot
-    plt.figure(figsize=(10, 6))
-    train_series.plot(label="train")
-    val_series.plot(label="val")
-    pred_series.plot(label="pred")
-    wandb.log({"Media": plt})
-    # plt.savefig('pred.png')
-    
-    # finish wandb
-    wandb.finish()
+        # plot
+        plt.figure(figsize=(10, 6))
+        train_series.plot(label="train")
+        val_series.plot(label="val")
+        pred_series.plot(label="pred")
+        wandb.log({"Media": plt})
+        # plt.savefig('pred.png')
+        
+        # finish wandb
+        wandb.finish()
     return

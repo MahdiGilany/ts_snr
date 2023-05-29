@@ -6,6 +6,7 @@ import json
 import logging
 import hydra
 from omegaconf import OmegaConf
+from glob import glob
 
 
 _RESOLVERS = {}
@@ -27,7 +28,7 @@ def default_workdir(name):
 
 
 @register_resolver
-def workdir_lookup(name, resume_id=None):
+def workdir_lookup(name, resume_run=False, new_dir=False):
     """
     Uses the file .workdirs.json to lookup the workdir for a given job_id.
 
@@ -37,27 +38,54 @@ def workdir_lookup(name, resume_id=None):
 
     workdir: ${workdir_lookup:example}
     """
-    if resume_id is None:
+    dir = join("logs", "experiments", "runs", name)
+    
+    if not os.path.exists(dir) or new_dir:
         return default_workdir(name)
+    
+    if resume_run is False:
+        raise ValueError(
+            f"Directory {dir} already exists, use a different name than {name} for the experiment," +
+            " use new_dir=True to create a new directory, or resume_run=True to resume the latest run."
+            )
 
-    file = ".workdirs.json"
-    if not os.path.exists(file):
-        logging.info("Making workdir lookup file")
-        with open(file, "w") as f:
-            f.write(json.dumps({}))
+    checklist = glob(os.path.join(dir, "*"))
+    return max(checklist, key=os.path.getctime)
+        
 
-    with open(file, "r") as f:
-        workdir_lookup = json.load(f)
 
-    if (dir := workdir_lookup.get(str(resume_id))) is None:
-        out = default_workdir(name)
-        workdir_lookup[resume_id] = out
-        with open(file, "w") as f:
-            f.write(json.dumps(workdir_lookup))
-        return out
+# @register_resolver
+# def workdir_lookup(name, resume_id=None):
+#     """
+#     Uses the file .workdirs.json to lookup the workdir for a given job_id.
 
-    else:
-        return dir
+#     usage:
+#     example.yaml
+#     ---------
+
+#     workdir: ${workdir_lookup:example}
+#     """
+#     if resume_id is None:
+#         return default_workdir(name)
+
+#     file = ".workdirs.json"
+#     if not os.path.exists(file):
+#         logging.info("Making workdir lookup file")
+#         with open(file, "w") as f:
+#             f.write(json.dumps({}))
+
+#     with open(file, "r") as f:
+#         workdir_lookup = json.load(f)
+
+#     if (dir := workdir_lookup.get(str(resume_id))) is None:
+#         out = default_workdir(name)
+#         workdir_lookup[resume_id] = out
+#         with open(file, "w") as f:
+#             f.write(json.dumps(workdir_lookup))
+#         return out
+
+#     else:
+#         return dir
 
 
 @register_resolver
