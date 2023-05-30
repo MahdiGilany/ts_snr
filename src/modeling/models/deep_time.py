@@ -18,7 +18,7 @@ from darts.models.forecasting.pl_forecasting_module import PLForecastingModule, 
 from darts.models.forecasting.torch_forecasting_model import PastCovariatesTorchModel
 from darts.utils.torch import MonteCarloDropout
 
-# logger = get_logger(__name__)
+logger = get_logger(__name__)
 
 
 class _DeepTIMeModule(PLPastCovariatesModule):
