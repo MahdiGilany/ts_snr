@@ -2,7 +2,7 @@ _target_: src.data.registry.data_registry.create_noisy_dataset
 
 dataset_name: air_passengers
 
-split_ratio: 0.75
+split_ratio: [0.6, 0.25, 0.15]
 
 noise_mean: 0 
 noise_std: 0

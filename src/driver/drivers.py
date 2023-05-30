@@ -36,12 +36,13 @@ def eval_model(
     configs: DictConfig,
     train_series: TimeSeries,
     val_series: TimeSeries,
+    test_series: TimeSeries,
     scaler: Optional[List] = None,
     log: bool = True,
     ) -> Union[Dict, TimeSeries]:
     """Metrics are found based on the validation series on historical forcasts of 
     the model (using validation to predict future values, read darts documentation).
-    The results are reported based on the scaled series.
+    The results are reported based on the scaled series and unscaled series.
 
     Args:
         model (TorchForecastingModel): _description_
@@ -60,39 +61,56 @@ def eval_model(
     
     # get historical forecasts
     from darts.timeseries import concatenate
-    all_series = concatenate([train_series, val_series])
+    all_train_series = concatenate([train_series, val_series])
+    all_series = concatenate([all_train_series, test_series])
     backtest_series = model.historical_forecasts(
         all_series,
-        start=val_series.start_time(),
+        start=test_series.start_time(),
         forecast_horizon=configs.model.output_chunk_length,
         retrain=False,
         verbose=True,
         )
     
-    rolling_pred = model.predict(series=train_series, n=len(val_series))
+    rolling_pred = model.predict(series=all_train_series, n=len(test_series)) # assumed val_series is bigger than input_chunk_length
     rolling_unscaled_pred = scaler[0].inverse_transform(rolling_pred) if scaler else rolling_pred
     
     # scale back series
     train_unscaled_series = scaler[0].inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
     val_unscaled_series = scaler[0].inverse_transform(val_series) if scaler else val_series
+    test_unscaled_series = scaler[0].inverse_transform(test_series) if scaler else test_series
     backtest_unscaled_series = scaler[0].inverse_transform(backtest_series) if scaler else backtest_series 
     
     # calculate metrics
-    results = calculate_metrics(val_series, backtest_series)
+    results = calculate_metrics(test_series, backtest_series)
+    results_unscaled = calculate_metrics(test_unscaled_series, backtest_unscaled_series)
+    results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length])
+    
     print("Results of backtesting:", results)
+    print("Results of backtesting:", results_unscaled)
 
     # log best    
     if log:
-        # log best 
+        # log best historical, best historical unscaled, best pred
         wandb.log({
-            f"val_best_{result_name}": np.array(results_value) 
+            f"test_best_historical_{result_name}": np.array(results_value) 
             for result_name, results_value in results.items()
+            })
+        
+        wandb.log({
+            f"test_best_historical_unscaled_{result_name}": np.array(results_value)
+            for result_name, results_value in results_unscaled.items()
+            })
+        
+        wandb.log({
+            f"test_best_pred_{result_name}": np.array(results_value)
+            for result_name, results_value in results_pred.items()
             })
     
         # plot
         plt.figure(figsize=(5, 3))
         train_unscaled_series.plot(label="train")
         val_unscaled_series.plot(label="val")
+        test_unscaled_series.plot(label="test")
         backtest_unscaled_series.plot(label="backtest")
         rolling_unscaled_pred.plot(label="rolling_pred")
         wandb.log({"Media": plt})
@@ -181,7 +199,6 @@ def darts_lightning_driver_run(configs: DictConfig):
                     pl_trainer_kwargs["callbacks"].append(instantiate(cb_conf))
 
     
-    
     # init lightning logger    
     if "logger" in configs:
         if configs.logger is not None:
@@ -200,7 +217,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     
     # loading data
     log.info(f"Instantiating data <{configs.data._target_}>")
-    train_series, val_series, *scaler = instantiate(configs.data)
+    train_series, val_series, test_series, *scaler = instantiate(configs.data)
     
     
     # defining metrics
@@ -239,7 +256,8 @@ def darts_lightning_driver_run(configs: DictConfig):
         model=model, 
         configs=configs, 
         train_series=train_series, 
-        val_series=val_series, 
+        val_series=val_series,
+        test_series=test_series, 
         scaler=scaler,
         log=configs.logger!=None,
         )
@@ -248,10 +266,11 @@ def darts_lightning_driver_run(configs: DictConfig):
         # finish wandb
         wandb.finish()
         
-    data = (train_series, val_series, backtest_series, *scaler)
+    data = (train_series, val_series, test_series, backtest_series, *scaler)
     return model, data, results
 
 
+# TODO change loading data
 def inference_darts_lightning_driver_run(configs: DictConfig):
     """Driver function for darts models with pytorch lightning.
     fixes seeds, instantiates datamodule, model, logger, trainer, callbacks, etc. and trains the model using model.fit().
