@@ -27,3 +27,5 @@ darts
 statsforecast==1.4 # very important to handle package conflicts
 python-dotenv
 ipywidgets # for notebook only
+pyts # for singular spectrum analysis
+
