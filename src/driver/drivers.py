@@ -55,7 +55,7 @@ def eval_model(
     """
     
     #load model    
-    model.load_from_checkpoint(model_name=configs.model.model_name) # TODO: needs work
+    model.load_from_checkpoint(model_name=configs.model.model_name) # TODO: needs work if not using wandb or not after training
     
     # get series from data_series
     train_series = data_series.train_series
@@ -68,22 +68,30 @@ def eval_model(
     from darts.timeseries import concatenate
     # test series for backtest should be noisy if available 
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy 
-    all_train_series = concatenate([train_series, val_series])
-    all_series = concatenate([all_train_series, test_series_backtest])
+    train_val_series_trimmed = concatenate([train_series, val_series])[-max(len(test_series_backtest),configs.model.input_chunk_length):] # TODO: this is not a good way to do it
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed, test_series_backtest])
+    stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
     backtest_series = model.historical_forecasts(
-        all_series,
+        train_val_test_series_trimmed,
         start=test_series_backtest.start_time(),
         forecast_horizon=configs.model.output_chunk_length,
         retrain=False,
         verbose=True,
+        stride=stride,
+        last_points_only=False if stride > 1 else True,
         )
     
-    rolling_pred = model.predict(series=all_train_series, n=len(test_series)) # assumed val_series is bigger than input_chunk_length
+    if isinstance(backtest_series, List):
+        assert stride == configs.model.output_chunk_length, "stride should be equal to output_chunk_length, otherwise not implemented yet"
+        backtest_series = concatenate(backtest_series)
+    
+    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(10*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
     rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     
     # scale back series
-    train_unscaled_series = scaler.inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
-    val_unscaled_series = scaler.inverse_transform(val_series) if scaler else val_series
+    # train_unscaled_series = scaler.inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
+    # val_unscaled_series = scaler.inverse_transform(val_series) if scaler else val_series
+    train_val_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
     backtest_unscaled_series = scaler.inverse_transform(backtest_series) if scaler else backtest_series 
     
@@ -114,13 +122,15 @@ def eval_model(
             })
     
         # plot
-        plt.figure(figsize=(5, 3))
-        train_unscaled_series.plot(label="train")
-        val_unscaled_series.plot(label="val")
-        test_unscaled_series.plot(label="test")
-        backtest_unscaled_series.plot(label="backtest")
-        rolling_unscaled_pred.plot(label="rolling_pred")
-        wandb.log({"Media": plt})
+        for component in test_unscaled_series.components:
+            plt.figure(figsize=(5, 3))
+            # train_unscaled_series.plot(label="train")
+            # val_unscaled_series.plot(label="val")
+            train_val_series_trimmed[component].plot(label="train_val_"+ component)
+            test_unscaled_series[component].plot(label="test_" + component)
+            backtest_unscaled_series[component].plot(label="backtest_" + component)
+            rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
+            wandb.log({"Media": plt})
     return results, backtest_series
                 
     

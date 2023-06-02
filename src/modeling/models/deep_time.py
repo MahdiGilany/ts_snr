@@ -26,12 +26,13 @@ class _DeepTIMeModule(PLPastCovariatesModule):
     '''
     def __init__(
         self,
+        forecast_horizon_length: int = 12,
         datetime_feats: int = 0,
         layer_size: int = 256,
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
-        nr_params: int = 1,
+        nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
         **kwargs,
         ):
@@ -40,6 +41,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.adaptive_weights = RidgeRegressor()
 
+        self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
         self.inr_layers = inr_layers
         self.layer_size = layer_size
@@ -65,9 +67,9 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         else:
             time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
-        lookback_reprs = time_reprs[:, :-tgt_horizon_len]
+        lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
-        w, b = self.adaptive_weights(lookback_reprs, x)
+        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.forecast(horizon_reprs, w, b)
         
         preds = preds.view(
@@ -133,8 +135,11 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         
     def _create_model(self, train_sample: Tuple[torch.Tensor]) -> torch.nn.Module:     
         # samples are made of (past_target, past_covariates, ,future_target)
-
-
+        input_dim = train_sample[0].shape[1]
+        # (train_sample[1].shape[1] if train_sample[1] is not None else 0)
+        output_dim = train_sample[-1].shape[1]
+        output_chunk_length = train_sample[-1].shape[0]
+        
         if self.likelihood:
             raise NotImplementedError("DeepTIMeModel does not support likelihoods yet")
         
@@ -142,6 +147,7 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         use_datetime = True if self.datetime_feats != 0 else False
         
         return _DeepTIMeModule(
+            forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,
             inr_layers=self.inr_layers,

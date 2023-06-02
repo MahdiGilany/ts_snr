@@ -18,7 +18,8 @@ trainer:
 #   output_chunk_length: 12
 
 # data:
-#   noise_mean: 0
+  # dataset_name: air_passengers
+  # noise_mean: 0
   # noise_std: 0
 
 # callbacks: 

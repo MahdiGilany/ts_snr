@@ -105,13 +105,13 @@ def create_noisy_dataset(
     
     # generate noise
     train_series_noise = TimeSeries.from_times_and_values(
-        train_series.time_index, np.random.randn(len(train_series))
+        train_series.time_index, np.random.randn(*train_series._xa.shape) # TODO: not a good way to access values
         )
     val_series_noise = TimeSeries.from_times_and_values(
-        val_series.time_index, np.random.randn(len(val_series))
+        val_series.time_index, np.random.randn(*val_series._xa.shape)
         )
     test_series_noise = TimeSeries.from_times_and_values(
-        test_series.time_index, np.random.randn(len(test_series))
+        test_series.time_index, np.random.randn(*test_series._xa.shape)
         )
     
     # add noise
