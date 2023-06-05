@@ -24,13 +24,16 @@ version=_slurm
 experiment="nbeats"
 seed=0
 batch_size=256
-epochs=100
+epochs=10
 noise_std=0
-dataset_name="airpassenger"
+dataset_name="etth2"
 new_dir=False
+multiple=7
+output_chunk_length=96
+input_chunk_length=$((output_chunk_length * multiple))
 
 group="${experiment}_${dataset_name}_seed${seed}_v${version}"
-name="${noise_std}_${group}"
+name="noisestd${noise_std}_${group}"
 
 # parse arguments
 for ARGUMENT in "$@"
@@ -50,6 +53,8 @@ python main.py name=$name\
             batch_size=$batch_size\
             epochs=$epochs\
             new_dir=$new_dir\
+            model.input_chunk_length=$input_chunk_length\
+            model.output_chunk_length=$output_chunk_length\
             data.dataset_name=$dataset_name\
             data.noise_std=$noise_std\
             logger.wandb.group=$group\
