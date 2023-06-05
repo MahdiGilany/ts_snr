@@ -209,7 +209,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     pl_trainer_kwargs["callbacks"]: List[Callback] = []
     if "callbacks" in configs:
         if configs.callbacks is not None:
-            pl_trainer_kwargs["enable_checkpointing"] = True
+            # pl_trainer_kwargs["enable_checkpointing"] = True
             for _, cb_conf in configs.callbacks.items():
                 if "_target_" in cb_conf:
                     log.info(f"Instantiating callback <{cb_conf._target_}>")
