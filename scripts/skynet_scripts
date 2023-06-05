@@ -1,3 +1,0 @@
-source /home/abbasgln/anaconda3/bin/activate borealis
-
-srun --gres=gpu:1 --cpus-per-task=6 --mem=60G --exclude=compute1080ti06,compute1080ti08 -t 7-1:00 --pty bash -l

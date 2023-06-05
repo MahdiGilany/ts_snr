@@ -195,3 +195,5 @@ outputs/
 /darts_logs
 
 /OLD 
+
+/slurm_logs

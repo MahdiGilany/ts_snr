@@ -1,0 +1,20 @@
+source /home/abbasgln/anaconda3/bin/activate borealis
+
+
+
+
+srun --gres=gpu:1 --cpus-per-task=6 --mem=60G --exclude=compute1080ti06,compute1080ti08 -t 7-1:00 --pty bash -l
+
+
+
+
+#!/bin/bash
+#SBATCH --mem=60G
+#SBATCH --gres=gpu:1
+#SBATCH -c 16      # num cores (cpus) requested [Default: 1]
+#SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
+#SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
+
+source /home/abbasgln/anaconda3/bin/activate borealis
+
+sbatch /.../... .sh # to submit a job
