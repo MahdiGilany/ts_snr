@@ -2,7 +2,7 @@ torch
 scikit-learn
 pandas
 matplotlib
-pytorch-lightning==1.6.5
+pytorch-lightning
 torch-optimizer
 timm
 wandb

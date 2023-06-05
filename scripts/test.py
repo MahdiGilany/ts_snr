@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from darts import TimeSeries
 from darts.datasets import AirPassengersDataset
 
+import wandb
+wandb.init(project="ts_snr", entity="borealisai")
+
 series = AirPassengersDataset().load()
 series.plot()
 
@@ -19,3 +22,7 @@ naive_forecast = naive_model.predict(36)
 
 series.plot(label="actual")
 naive_forecast.plot(label="naive forecast (K=1)")
+
+wandb.log({"Media": plt})
+
+wandb.finish()
