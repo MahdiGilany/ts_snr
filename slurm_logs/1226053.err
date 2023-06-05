@@ -1,0 +1,127 @@
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+wandb: Currently logged in as: mahdigilany (borealisai). Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.15.3
+wandb: Run data is saved locally in ./wandb/run-20230605_161841-wmwjwvod
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run deeptime_airpassenger
+wandb: ⭐️ View project at https://wandb.ai/borealisai/ts_snr
+wandb: 🚀 View run at https://wandb.ai/borealisai/ts_snr/runs/wmwjwvod
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/lightning_fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python main.py experiment=deeptime new_dir=True id=1226053  ...
+  rank_zero_warn(
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/lightning_fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python main.py experiment=deeptime new_dir=True id=1226053  ...
+  rank_zero_warn(
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+
+  | Name             | Type             | Params
+------------------------------------------------------
+0 | criterion        | MSELoss          | 0     
+1 | train_metrics    | MetricCollection | 0     
+2 | val_metrics      | MetricCollection | 0     
+3 | inr              | INR              | 1.3 M 
+4 | adaptive_weights | RidgeRegressor   | 1     
+------------------------------------------------------
+1.3 M     Trainable params
+0         Non-trainable params
+1.3 M     Total params
+5.258     Total estimated model params size (MB)
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/pytorch_lightning/loops/fit_loop.py:280: PossibleUserWarning: The number of training batches (2) is smaller than the logging interval Trainer(log_every_n_steps=50). Set a lower value for log_every_n_steps if you want to see logs for the training epoch.
+  rank_zero_warn(
+  0%|          | 0/1 [00:00<?, ?it/s]/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/lightning_fabric/plugins/environments/slurm.py:165: PossibleUserWarning: The `srun` command is available on your system but is not used. HINT: If your intention is to run Lightning on SLURM, prepend your python command with `srun` like so: srun python main.py experiment=deeptime new_dir=True id=1226053  ...
+  rank_zero_warn(
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+100%|██████████| 1/1 [00:00<00:00, 16.35it/s]
+GPU available: True (cuda), used: True
+TPU available: False, using: 0 TPU cores
+IPU available: False, using: 0 IPUs
+HPU available: False, using: 0 HPUs
+LOCAL_RANK: 0 - CUDA_VISIBLE_DEVICES: [0]
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/plotly/matplotlylib/renderer.py:647: UserWarning:
+
+Looks like the annotation(s) you are trying 
+to draw lies/lay outside the given figure size.
+
+Therefore, the resulting Plotly figure may not be 
+large enough to view the full text. To adjust 
+the size of the figure, use the 'width' and 
+'height' keys in the Layout object. Alternatively,
+use the Margin object to adjust the figure's margins.
+
+/home/abbasgln/anaconda3/envs/borealis/lib/python3.9/site-packages/plotly/matplotlylib/renderer.py:611: UserWarning:
+
+I found a path object that I don't think is part of a bar chart. Ignoring.
+
+wandb: Waiting for W&B process to finish... (success).
+wandb: - 0.026 MB of 0.026 MB uploaded (0.002 MB deduped)wandb: \ 0.026 MB of 0.026 MB uploaded (0.002 MB deduped)wandb: | 0.026 MB of 0.026 MB uploaded (0.002 MB deduped)wandb: / 0.026 MB of 0.026 MB uploaded (0.002 MB deduped)wandb: - 0.026 MB of 0.026 MB uploaded (0.002 MB deduped)wandb: 
+wandb: Run history:
+wandb:                               epoch ▁▁▁▂▂▂▂▂▂▃▃▃▃▃▄▄▄▄▄▄▅▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇███
+wandb:            test_best_historical_mae ▁
+wandb:           test_best_historical_mape ▁
+wandb:            test_best_historical_mse ▁
+wandb:            test_best_historical_ope ▁
+wandb:           test_best_historical_rmse ▁
+wandb:          test_best_historical_smape ▁
+wandb:   test_best_historical_unscaled_mae ▁
+wandb:  test_best_historical_unscaled_mape ▁
+wandb:   test_best_historical_unscaled_mse ▁
+wandb:   test_best_historical_unscaled_ope ▁
+wandb:  test_best_historical_unscaled_rmse ▁
+wandb: test_best_historical_unscaled_smape ▁
+wandb:                  test_best_pred_mae ▁
+wandb:                 test_best_pred_mape ▁
+wandb:                  test_best_pred_mse ▁
+wandb:                  test_best_pred_ope ▁
+wandb:                 test_best_pred_rmse ▁
+wandb:                test_best_pred_smape ▁
+wandb:             train_MeanAbsoluteError █▄▃▃▃▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:   train_MeanAbsolutePercentageError █▄▃▃▃▃▃▃▃▂▂▂▂▂▂▂▂▂▂▂▂▂▁▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:              train_MeanSquaredError █▄▂▂▂▂▂▂▂▂▂▂▂▁▂▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁▁
+wandb:                          train_loss █▁
+wandb:                 trainer/global_step ▁▁▁▂▂▂▂▂▃▃▃▃▃▃▄▄▄▄▄▅▅▅▅▅▆▆▆▆▆▇▇▇▇▇▇█████
+wandb:               val_MeanAbsoluteError ▁▁▄▇▆██▄▅█▅
+wandb:     val_MeanAbsolutePercentageError ▁▁▅▇▇██▅▆█▅
+wandb:                val_MeanSquaredError ▁▁▄▆▆██▃▄█▃
+wandb:                            val_loss ▁▁▄▆▆██▃▄█▃
+wandb: 
+wandb: Run summary:
+wandb:                               epoch 54
+wandb:            test_best_historical_mae 0.15634
+wandb:           test_best_historical_mape 12.21414
+wandb:            test_best_historical_mse 0.03548
+wandb:            test_best_historical_ope 11.58259
+wandb:           test_best_historical_rmse 0.18835
+wandb:          test_best_historical_smape 11.26679
+wandb:   test_best_historical_unscaled_mae 40.64896
+wandb:  test_best_historical_unscaled_mape 9.24095
+wandb:   test_best_historical_unscaled_mse 2398.22477
+wandb:   test_best_historical_unscaled_ope 8.80116
+wandb:  test_best_historical_unscaled_rmse 48.97167
+wandb: test_best_historical_unscaled_smape 8.68608
+wandb:                  test_best_pred_mae 0.16612
+wandb:                 test_best_pred_mape 13.02628
+wandb:                  test_best_pred_mse 0.03668
+wandb:                  test_best_pred_ope 12.35504
+wandb:                 test_best_pred_rmse 0.19153
+wandb:                test_best_pred_smape 12.03931
+wandb:             train_MeanAbsoluteError 0.06623
+wandb:   train_MeanAbsolutePercentageError 0.15855
+wandb:              train_MeanSquaredError 0.00664
+wandb:                          train_loss 0.00729
+wandb:                 trainer/global_step 109
+wandb:               val_MeanAbsoluteError 0.27696
+wandb:     val_MeanAbsolutePercentageError 0.26817
+wandb:                val_MeanSquaredError 0.08449
+wandb:                            val_loss 0.08449
+wandb: 
+wandb: 🚀 View run deeptime_airpassenger at: https://wandb.ai/borealisai/ts_snr/runs/wmwjwvod
+wandb: Synced 7 W&B file(s), 1 media file(s), 3 artifact file(s) and 1 other file(s)
+wandb: Find logs at: ./wandb/run-20230605_161841-wmwjwvod/logs
