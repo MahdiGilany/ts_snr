@@ -10,3 +10,5 @@ defaults:
   - /trainer: trainer_default
   - /logger: wandb_lightning # / "slash" is for recognizing logger folder in previous folder 
   - /callbacks: callbacks_default
+
+verbose: true

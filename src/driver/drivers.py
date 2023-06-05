@@ -76,7 +76,7 @@ def eval_model(
         start=test_series_backtest.start_time(),
         forecast_horizon=configs.model.output_chunk_length,
         retrain=False,
-        verbose=True,
+        verbose=configs.verbose,
         stride=stride,
         last_points_only=False if stride > 1 else True,
         )
@@ -262,7 +262,7 @@ def darts_lightning_driver_run(configs: DictConfig):
     model.fit(
         data_series.train_series,
         epochs=configs.epochs,
-        verbose=True,
+        verbose=configs.verbose,
         num_loader_workers=0,
         val_series=data_series.val_series,
         ) # trainer

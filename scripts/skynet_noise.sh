@@ -18,5 +18,43 @@ sleep 10
 
 
 echo "STARTING"
-python main.py experiment=deeptime new_dir=True id=$SLURM_JOB_ID epochs=100
+
+# defaults
+version=_slurm
+experiment="nbeats"
+seed=0
+batch_size=256
+epochs=100
+noise_std=0
+dataset_name="airpassenger"
+new_dir=False
+
+group="${experiment}_${dataset_name}_seed${seed}_v${version}"
+name="${noise_std}_${group}"
+
+# parse arguments
+for ARGUMENT in "$@"
+do
+   KEY=$(echo $ARGUMENT | cut -f1 -d=)
+
+   KEY_LENGTH=${#KEY}
+   VALUE="${ARGUMENT:$KEY_LENGTH+1}"
+
+   export "$KEY"="$VALUE"
+done
+
+# run experiment
+python main.py name=$name\
+            experiment=$experiment\
+            seed=$seed\
+            batch_size=$batch_size\
+            epochs=$epochs\
+            new_dir=$new_dir\
+            data.dataset_name=$dataset_name\
+            data.noise_std=$noise_std\
+            logger.wandb.group=$group\
+            verbose=False\
+            id=$SLURM_JOB_ID\
+
+
 echo "DONE"
