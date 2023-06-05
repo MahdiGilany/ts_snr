@@ -34,37 +34,37 @@ def calculate_metrics(true, pred):
     try:
         _mae =  mae(true, pred)
     except:
-        _mae = torch.tensor(np.nan, device=true.device)
+        _mae = torch.tensor(np.nan)
     
     try:
         _mse = mse(true, pred)
     except:
-        _mse = torch.tensor(np.nan, device=true.device)
+        _mse = torch.tensor(np.nan)
     
     try:
         _rmse = rmse(true, pred)
     except:
-        _rmse = torch.tensor(np.nan, device=true.device)
+        _rmse = torch.tensor(np.nan)
     
     try:
         _mape = mape(true, pred)
     except:
-        _mape = torch.tensor(np.nan, device=true.device)
+        _mape = torch.tensor(np.nan)
     
     try:
         _smape = smape(true, pred)
     except:
-        _smape = torch.tensor(np.nan, device=true.device)
+        _smape = torch.tensor(np.nan)
     
     try:
         _ope = ope(true, pred)
     except:
-        _ope = torch.tensor(np.nan, device=true.device)
+        _ope = torch.tensor(np.nan)
         
     try:
         _mase = mase(true, pred)
     except:
-        _mase = torch.tensor(np.nan, device=true.device)
+        _mase = torch.tensor(np.nan)
     
         
     
