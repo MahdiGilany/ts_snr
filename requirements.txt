@@ -1,5 +1,5 @@
 torch
-sklearn
+scikit-learn
 pandas
 matplotlib
 pytorch-lightning==1.6.5
@@ -28,4 +28,3 @@ statsforecast==1.4 # very important to handle package conflicts
 python-dotenv
 ipywidgets # for notebook only
 pyts # for singular spectrum analysis
-
