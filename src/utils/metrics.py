@@ -1,7 +1,8 @@
 import torch
 from torchmetrics import MetricCollection, Metric
-from darts.metrics import mape, mse, mae, rmse, smape, ope
+from darts.metrics import mape, mse, mae, rmse, smape, ope, mase
 from typing import Any
+import numpy as np
 
 # class MAPEMetric(Metric):
 #     # def __init__(self, compute_on_step=True, dist_sync_on_step=False):
@@ -30,9 +31,54 @@ from typing import Any
 
 
 def calculate_metrics(true, pred):
-    return {'mae': mae(true, pred),
-            'mse': mse(true, pred),
-            'rmse': rmse(true, pred),
-            'mape': mape(true, pred),
-            'smape': smape(true, pred),
-            'ope': ope(true, pred)}
+    try:
+        _mae =  mae(true, pred)
+    except:
+        _mae = torch.tensor(np.nan, device=true.device)
+    
+    try:
+        _mse = mse(true, pred)
+    except:
+        _mse = torch.tensor(np.nan, device=true.device)
+    
+    try:
+        _rmse = rmse(true, pred)
+    except:
+        _rmse = torch.tensor(np.nan, device=true.device)
+    
+    try:
+        _mape = mape(true, pred)
+    except:
+        _mape = torch.tensor(np.nan, device=true.device)
+    
+    try:
+        _smape = smape(true, pred)
+    except:
+        _smape = torch.tensor(np.nan, device=true.device)
+    
+    try:
+        _ope = ope(true, pred)
+    except:
+        _ope = torch.tensor(np.nan, device=true.device)
+        
+    try:
+        _mase = mase(true, pred)
+    except:
+        _mase = torch.tensor(np.nan, device=true.device)
+    
+        
+    
+    return {'mae': _mae,
+            'mse': _mse,
+            'rmse': _rmse,
+            'mape': _mape,
+            'smape': _smape,
+            'ope': _ope,
+            'mase': _mase}
+    
+    # return {'mae': mae(true, pred),
+    #         'mse': mse(true, pred),
+    #         'rmse': rmse(true, pred),
+    #         'mape': mape(true, pred),
+    #         'smape': smape(true, pred),
+    #         'ope': ope(true, pred)}
