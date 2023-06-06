@@ -3,11 +3,14 @@
 defaults:
   - exp_default
   
-name: "deeptime_airpassenger_test"
-epochs: 5
-save_checkpoints: False
+name: "nbeats_etth1_test"
+epochs: 1
+save_checkpoints: True
 
-model:
-  model_name: deeptime
+data:
+  dataset_name: etth1
+
+# model:
+#   model_name: deeptime
 
 logger: null

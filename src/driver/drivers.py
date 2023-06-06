@@ -130,6 +130,7 @@ def eval_model(
             test_unscaled_series[component].plot(label="test_" + component)
             backtest_unscaled_series[component].plot(label="backtest_" + component)
             rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
+            # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
     return results, backtest_series
                 

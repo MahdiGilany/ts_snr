@@ -21,51 +21,6 @@ from darts.datasets import (
 )
 
 
-def darts_datasets(DatasetClass: DatasetLoaderCSV):
-    
-    def datasets_from_DatasetLoaderCSV(
-        split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
-        use_scaler: bool = True,
-        **kwargs
-        ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
-        """Creates a Darts dataset from a Darts DatasetLoaderCSV class.
-        """
-        series = DatasetClass().load().astype(np.float32)
-        data_series = split_series(series, split_ratio)
-        
-        if use_scaler:
-            scaler = Scaler()
-            train_series_scaled = scaler.fit_transform(data_series.train_series)
-            val_series_scaled = scaler.transform(data_series.val_series)
-            test_series_scaled = scaler.transform(data_series.test_series)
-            data_scaled_series = DataSeries(
-                train_series=train_series_scaled,
-                val_series=val_series_scaled,
-                test_series=test_series_scaled,
-                scaler=scaler
-                )
-            return data_scaled_series
-        return data_series
-    
-    return datasets_from_DatasetLoaderCSV
-
-
-_DATASETS = {
-    "air_passengers": darts_datasets(AirPassengersDataset),
-    "etth1": darts_datasets(ETTh1Dataset),
-    "etth2": darts_datasets(ETTh2Dataset),
-    "ettm1": darts_datasets(ETTm1Dataset),
-    "ettm2": darts_datasets(ETTm2Dataset),
-    "electricity": darts_datasets(ElectricityDataset),
-    "exchange_rate": darts_datasets(ExchangeRateDataset),
-    "traffic": darts_datasets(TrafficDataset),
-    "weather": darts_datasets(WeatherDataset),
-    "energy": darts_datasets(EnergyDataset),
-    "uber": darts_datasets(UberTLCDataset),
-    
-}
-
-
 def register_dataset(factory):
     _DATASETS[factory.__name__] = factory
     return factory
@@ -76,16 +31,6 @@ def create_dataset(dataset_name, **kwargs):
         raise ValueError(f"Dataset <{dataset_name}> not registered.")
     
     return _DATASETS[dataset_name](**kwargs)
-
-
-@dataclass
-class DataSeries:
-    train_series: TimeSeries = None
-    val_series: TimeSeries = None
-    test_series: TimeSeries = None
-    test_series_noisy: TimeSeries = None
-    backtest_series: TimeSeries = None
-    scaler: Scaler = None
 
 
 def create_noisy_dataset(
@@ -157,6 +102,69 @@ def split_series(
         test_series=test_series,
         )
     return data_series    
+
+
+@dataclass
+class DataSeries:
+    train_series: TimeSeries = None
+    val_series: TimeSeries = None
+    test_series: TimeSeries = None
+    test_series_noisy: TimeSeries = None
+    backtest_series: TimeSeries = None
+    scaler: Scaler = None
+
+
+def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
+    
+    def datasets_from_DatasetLoaderCSV(
+        split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
+        use_scaler: bool = True,
+        **kwargs
+        ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
+        """Creates a Darts dataset from a Darts DatasetLoaderCSV class.
+        """
+        series = DatasetClass().load().astype(np.float32)
+        data_series = split_series(series, split_ratio)
+        
+        if use_scaler:
+            scaler = Scaler()
+            train_series_scaled = scaler.fit_transform(data_series.train_series)
+            val_series_scaled = scaler.transform(data_series.val_series)
+            test_series_scaled = scaler.transform(data_series.test_series)
+            data_scaled_series = DataSeries(
+                train_series=train_series_scaled,
+                val_series=val_series_scaled,
+                test_series=test_series_scaled,
+                scaler=scaler
+                )
+            return data_scaled_series
+        return data_series
+    
+    return datasets_from_DatasetLoaderCSV
+
+
+_DATASETS = {
+    "air_passengers": darts_predefined_datasets(AirPassengersDataset),
+    "etth1": darts_predefined_datasets(ETTh1Dataset),
+    "etth2": darts_predefined_datasets(ETTh2Dataset),
+    "ettm1": darts_predefined_datasets(ETTm1Dataset),
+    "ettm2": darts_predefined_datasets(ETTm2Dataset),
+    "electricity": darts_predefined_datasets(ElectricityDataset),
+    "exchange_rate": darts_predefined_datasets(ExchangeRateDataset),
+    "traffic": darts_predefined_datasets(TrafficDataset),
+    "weather": darts_predefined_datasets(WeatherDataset),
+    "energy": darts_predefined_datasets(EnergyDataset),
+    "uber": darts_predefined_datasets(UberTLCDataset),
+    
+}
+
+
+# @register_dataset
+# def new_dataset(
+#     split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
+#     use_scaler: bool = True,
+#     **kwargs
+#     ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
 
 
 
