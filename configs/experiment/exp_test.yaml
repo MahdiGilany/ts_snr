@@ -7,6 +7,9 @@ name: "nbeats_etth1_test"
 epochs: 1
 save_checkpoints: True
 
+trainer:
+  check_val_every_n_epoch: 1
+  
 data:
   dataset_name: etth1
 
