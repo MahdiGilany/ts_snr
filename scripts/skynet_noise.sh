@@ -14,7 +14,7 @@ whoami
 echo "Job_ID="$SLURM_JOB_ID
 
 echo $CUDA_VISIBLE_DEVICES
-sleep 10
+sleep 1
 
 
 echo "STARTING"
@@ -32,9 +32,6 @@ multiple=7
 output_chunk_length=96
 input_chunk_length=$((output_chunk_length * multiple))
 
-group="${experiment}_${dataset_name}_seed${seed}_v${version}"
-name="noisestd${noise_std}_${group}"
-
 # parse arguments
 for ARGUMENT in "$@"
 do
@@ -45,6 +42,10 @@ do
 
    export "$KEY"="$VALUE"
 done
+
+# set name and group
+group="${experiment}_${dataset_name}_seed${seed}_v${version}"
+name="${group}_noisestd${noise_std}"
 
 # run experiment
 python main.py name=$name\
