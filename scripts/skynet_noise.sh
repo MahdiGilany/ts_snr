@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --mem=60G
+#SBATCH --mem=20G
 #SBATCH --gres=gpu:1
 #SBATCH -c 16 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
@@ -12,15 +12,20 @@ source /home/abbasgln/anaconda3/bin/activate borealis
 hostname
 whoami
 echo "Job_ID="$SLURM_JOB_ID
-
-echo $CUDA_VISIBLE_DEVICES
+echo "CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES
+# nvidia-smi
+# rmmod nvidia_uvm
+# modprobe nvidia_uvm
 sleep 1
+
+# HYDRA_FULL_ERROR=1
+# export HYDRA_FULL_ERROR
 
 
 echo "STARTING"
 
 # defaults
-version=_slurm
+version=Slurm
 experiment="nbeats"
 seed=0
 batch_size=256
@@ -43,11 +48,13 @@ do
    export "$KEY"="$VALUE"
 done
 
-# set name and group
-group="${experiment}_${dataset_name}_seed${seed}_v${version}"
-name="${group}_noisestd${noise_std}"
+# set name, group, and input chunk length
+input_chunk_length=$((output_chunk_length * multiple))
+group="${experiment}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
+name="${group}_seed${seed}"
 
 # run experiment
+# python scripts/test.py
 python main.py name=$name\
             experiment=$experiment\
             seed=$seed\

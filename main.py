@@ -11,6 +11,7 @@ import logging
 from src.config import initialize
 import src.driver.drivers as drivers
 
+import torch
 from torch.multiprocessing import set_sharing_strategy
 from dotenv import load_dotenv
 
@@ -50,6 +51,8 @@ def maybe_resume_previous_run(config):
     version_base="1.1",
 )
 def main(config):
+    print("cuda available?", torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    
     config = maybe_resume_previous_run(config)
     pprint(OmegaConf.to_object(config))
 

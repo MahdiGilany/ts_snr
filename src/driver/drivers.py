@@ -101,7 +101,7 @@ def eval_model(
     results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length])
     
     print("Results of backtesting:", results)
-    print("Results of backtesting:", results_unscaled)
+    print("Results of backtesting unscaled:", results_unscaled)
 
     # log best    
     if log:
