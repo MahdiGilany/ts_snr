@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --mem=20G
+#SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH -c 16 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
@@ -16,7 +16,7 @@ echo "CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES
 # nvidia-smi
 # rmmod nvidia_uvm
 # modprobe nvidia_uvm
-sleep 1
+sleep 3
 
 # HYDRA_FULL_ERROR=1
 # export HYDRA_FULL_ERROR
