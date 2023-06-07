@@ -30,39 +30,39 @@ import numpy as np
 #         return _mean_absolute_percentage_error_compute(self.sum_abs_per_error, self.total)
 
 
-def calculate_metrics(true, pred):
+def calculate_metrics(true, pred, **kwargs):
     try:
-        _mae =  mae(true, pred)
+        _mae =  mae(true, pred, **kwargs)
     except:
         _mae = torch.tensor(np.nan)
     
     try:
-        _mse = mse(true, pred)
+        _mse = mse(true, pred, **kwargs)
     except:
         _mse = torch.tensor(np.nan)
     
     try:
-        _rmse = rmse(true, pred)
+        _rmse = rmse(true, pred, **kwargs)
     except:
         _rmse = torch.tensor(np.nan)
     
     try:
-        _mape = mape(true, pred)
+        _mape = mape(true, pred, **kwargs)
     except:
         _mape = torch.tensor(np.nan)
     
     try:
-        _smape = smape(true, pred)
+        _smape = smape(true, pred, **kwargs)
     except:
         _smape = torch.tensor(np.nan)
     
     try:
-        _ope = ope(true, pred)
+        _ope = ope(true, pred, **kwargs)
     except:
         _ope = torch.tensor(np.nan)
         
     try:
-        _mase = mase(true, pred)
+        _mase = mase(true, pred, **kwargs)
     except:
         _mase = torch.tensor(np.nan)
     

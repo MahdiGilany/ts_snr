@@ -96,9 +96,9 @@ def eval_model(
     backtest_unscaled_series = scaler.inverse_transform(backtest_series) if scaler else backtest_series 
     
     # calculate metrics
-    results = calculate_metrics(test_series, backtest_series)
-    results_unscaled = calculate_metrics(test_unscaled_series, backtest_unscaled_series)
-    results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length])
+    results = calculate_metrics(test_series, backtest_series, reduction=None)
+    results_unscaled = calculate_metrics(test_unscaled_series, backtest_unscaled_series, reduction=None)
+    results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length], reduction=None)
     
     print("Results of backtesting:", results)
     print("Results of backtesting unscaled:", results_unscaled)
@@ -107,22 +107,37 @@ def eval_model(
     if log:
         # log best historical, best historical unscaled, best pred
         wandb.log({
-            f"test_best_historical_{result_name}": np.array(results_value) 
+            f"test_best_historical_{result_name}": np.mean(results_value) 
             for result_name, results_value in results.items()
             })
         
         wandb.log({
-            f"test_best_historical_unscaled_{result_name}": np.array(results_value)
+            f"test_best_historical_unscaled_{result_name}": np.mean(results_value)
             for result_name, results_value in results_unscaled.items()
             })
         
         wandb.log({
-            f"test_best_pred_{result_name}": np.array(results_value)
+            f"test_best_pred_{result_name}": np.mean(results_value)
             for result_name, results_value in results_pred.items()
             })
     
         # plot
-        for component in test_unscaled_series.components:
+        for i, component in enumerate(test_unscaled_series.components):
+            wandb.log({
+                f"test_best_historical_{result_name}_{component}": np.array(results_value)[i]
+                for result_name, results_value in results.items()
+                })
+        
+            wandb.log({
+                f"test_best_historical_unscaled_{result_name}_{component}": np.array(results_value)[i]
+                for result_name, results_value in results_unscaled.items()
+                })
+        
+            wandb.log({
+                f"test_best_pred_{result_name}_{component}": np.array(results_value)[i]
+                for result_name, results_value in results_pred.items()
+                })
+            
             plt.figure(figsize=(5, 3))
             # train_unscaled_series.plot(label="train")
             # val_unscaled_series.plot(label="val")
