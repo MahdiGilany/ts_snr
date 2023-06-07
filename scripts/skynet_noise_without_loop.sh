@@ -50,12 +50,6 @@ done
 # run experiment
 # python scripts/test.py
 
-# for noise_std in 0 10 30 50 70 90 200
-# do
-
-for seed in {0..4}
-do
-
 # set name, group, and input chunk length
 input_chunk_length=$((output_chunk_length * multiple))
 group="${experiment}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
@@ -75,6 +69,5 @@ python main.py name=$name\
             logger.wandb.group=$group\
             verbose=False\
             id=$SLURM_JOB_ID
-done
 
 echo "DONE"
