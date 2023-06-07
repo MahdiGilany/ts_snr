@@ -1,6 +1,6 @@
 import torch
 from torchmetrics import MetricCollection, Metric
-from darts.metrics import mape, mse, mae, rmse, smape, ope, mase
+from darts.metrics import mape, mse, mae, rmse, smape, ope, mase, r2_score
 from typing import Any
 import numpy as np
 
@@ -66,7 +66,10 @@ def calculate_metrics(true, pred, **kwargs):
     except:
         _mase = torch.tensor(np.nan)
     
-        
+    try:
+        _r2 = r2_score(true, pred, **kwargs)
+    except:
+        _r2 = torch.tensor(np.nan)
     
     return {'mae': _mae,
             'mse': _mse,
@@ -74,7 +77,9 @@ def calculate_metrics(true, pred, **kwargs):
             'mape': _mape,
             'smape': _smape,
             'ope': _ope,
-            'mase': _mase}
+            'mase': _mase,
+            'r2': _r2,
+            }
     
     # return {'mae': mae(true, pred),
     #         'mse': mse(true, pred),
