@@ -32,6 +32,55 @@ def train_model():
     ...
 
 
+def historical_forecast(
+    model: TorchForecastingModel,
+    test_series: TimeSeries,
+    input_chunk_length: int,
+    output_chunk_length: int,
+    ) -> Union[TimeSeries, List[TimeSeries]]:
+    
+    from torch.utils.data import DataLoader
+    from tqdm import tqdm
+    
+    # manually build test dataset and dataloader
+    test_ds = model._build_train_dataset(test_series, past_covariates=None, future_covariates=None, max_samples_per_ts=None)
+    test_dl = DataLoader(
+        test_ds,
+        batch_size=model.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+        collate_fn=model._batch_collate_fn,
+        )
+
+    assert model.model is not None, "model.model not found, please load the model using model.load_from_checkpoint()\
+        or model.load_weights_from_checkpoint() which initializes model.model"
+    
+    pl_model = model.model 
+    pl_model.eval()
+    preds = []
+    # one epoch of evaluation on test set
+    for batch in tqdm(test_dl, desc="evaluating on test set"):
+        input_series, _, _, target_series = batch
+        input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        pred = pl_model((input_series, _))
+        preds.append(pred)
+    preds = torch.cat(preds, dim=0)
+    
+    # turn into TimeSeries
+    list_backtest_series = []
+    for i in range(preds.shape[0]):
+        backtest_series = TimeSeries.from_times_and_values(
+            test_series.time_index[input_chunk_length+i:input_chunk_length+i+output_chunk_length],
+            preds[i,...].detach().cpu().numpy(),
+            freq=test_series.freq
+            )
+        list_backtest_series.append(backtest_series)
+    return list_backtest_series
+    
+    
 def eval_model(
     model: TorchForecastingModel,
     configs: DictConfig,
@@ -69,40 +118,57 @@ def eval_model(
     # test series for backtest should be noisy if available 
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy 
     train_val_series_trimmed = concatenate([train_series, val_series])[-max(len(test_series_backtest),configs.model.input_chunk_length):] # TODO: this is not a good way to do it
-    train_val_test_series_trimmed = concatenate([train_val_series_trimmed, test_series_backtest])
-    stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
-    backtest_series = model.historical_forecasts(
-        train_val_test_series_trimmed,
-        start=test_series_backtest.start_time(),
-        forecast_horizon=configs.model.output_chunk_length,
-        retrain=False,
-        verbose=configs.verbose,
-        stride=stride,
-        last_points_only=False if stride > 1 else True,
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[:-configs.model.input_chunk_length], test_series_backtest])
+    # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
+    
+    log.info("Backtesting the model without retraining (testing on test series)")
+    list_backtest_series = historical_forecast(
+        model=model,
+        test_series=train_val_test_series_trimmed,
+        input_chunk_length=configs.model.input_chunk_length,
+        output_chunk_length=configs.model.output_chunk_length,
         )
+    # backtest_series = model.historical_forecasts( # it is not parallelized!!!!!!!!!!!!!!!!!!!!!
+    #     train_val_test_series_trimmed,
+    #     start=test_series_backtest.start_time(),
+    #     forecast_horizon=configs.model.output_chunk_length,
+    #     retrain=False,
+    #     verbose=False,
+    #     # stride=stride,
+    #     # last_points_only=False if stride > 1 else True,
+    #     last_points_only=False,
+    #     )
+    # if isinstance(backtest_series, List):
+    #     assert stride == configs.model.output_chunk_length, "stride should be equal to output_chunk_length, otherwise not implemented yet"
+    #     backtest_series = concatenate(backtest_series)
     
-    if isinstance(backtest_series, List):
-        assert stride == configs.model.output_chunk_length, "stride should be equal to output_chunk_length, otherwise not implemented yet"
-        backtest_series = concatenate(backtest_series)
-    
-    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(10*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
-    rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     
     # scale back series
     # train_unscaled_series = scaler.inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
     # val_unscaled_series = scaler.inverse_transform(val_series) if scaler else val_series
+    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(10*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
+    rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     train_val_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
-    backtest_unscaled_series = scaler.inverse_transform(backtest_series) if scaler else backtest_series 
+    list_backtest_unscaled_series = scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
     
     # calculate metrics
-    results = calculate_metrics(test_series, backtest_series, reduction=np.array)
-    results_unscaled = calculate_metrics(test_unscaled_series, backtest_unscaled_series, reduction=np.array)
+    breakpoint()
+    # size of time series should be list of TimeSeries(n, 7, 1) but size of backtest should be list of n-1 TimeSeries(forecast_horizon, 7, 1)
+    
+    # output of calculate_metrics should be size (n-1, 7)
+    results = calculate_metrics(test_series, list_backtest_series, reduction=np.array)
+    results_unscaled = calculate_metrics(test_unscaled_series, list_backtest_unscaled_series, reduction=np.array)
     results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length], reduction=np.array)
     
     print("Results of backtesting:", results)
     print("Results of backtesting unscaled:", results_unscaled)
 
+    log.info("logging results to wandb")
+    
+    # for visualizing backtest, we use last points only
+    backtest_unscaled_series = concatenate(list_backtest_unscaled_series)[configs.model.output_chunk_length-1::configs.model.output_chunk_length]
+    
     # log best    
     if log:
         # log best historical, best historical unscaled, best pred
@@ -124,17 +190,17 @@ def eval_model(
         # plot
         for i, component in enumerate(test_unscaled_series.components):
             wandb.log({
-                f"test_best_historical_{result_name}_{component}": results_value[i]
+                f"test_best_historical_{result_name}_{component}": results_value[..., i].mean()
                 for result_name, results_value in results.items() if not np.isnan(results_value).any()
                 })
         
             wandb.log({
-                f"test_best_historical_unscaled_{result_name}_{component}": results_value[i]
+                f"test_best_historical_unscaled_{result_name}_{component}": results_value[..., i].mean()
                 for result_name, results_value in results_unscaled.items() if not np.isnan(results_value).any()
                 })
         
             wandb.log({
-                f"test_best_pred_{result_name}_{component}": results_value[i]
+                f"test_best_pred_{result_name}_{component}": results_value[..., i].mean()
                 for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
                 })
             
@@ -147,7 +213,7 @@ def eval_model(
             rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
             # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
-    return results, backtest_series
+    return results, list_backtest_series
                 
     
 def NOTUSED_simple_run(configs: DictConfig):
@@ -326,6 +392,7 @@ def inference_darts_lightning_driver_run(configs: DictConfig):
     pl_trainer_kwargs["callbacks"]: List[Callback] = []
     if "callbacks" in configs:
         if configs.callbacks is not None:
+            # pl_trainer_kwargs["enable_checkpointing"] = True
             for _, cb_conf in configs.callbacks.items():
                 if "_target_" in cb_conf:
                     log.info(f"Instantiating callback <{cb_conf._target_}>")
@@ -351,19 +418,20 @@ def inference_darts_lightning_driver_run(configs: DictConfig):
     
     # loading data
     log.info(f"Instantiating data <{configs.data._target_}>")
-    train_series, val_series, *scaler = instantiate(configs.data)
-    data = (train_series, val_series, *scaler)
+    data_series: DataSeries = instantiate(configs.data)
+    
     
     # defining metrics
     log.info(f"Preparing metrics")
-    from torchmetrics import MetricCollection, MeanAbsolutePercentageError
+    from torchmetrics import MetricCollection, MeanAbsolutePercentageError, MeanSquaredError, MeanAbsoluteError
     mape = MeanAbsolutePercentageError()
-    metrics = MetricCollection([mape])
+    mse = MeanSquaredError()
+    mae = MeanAbsoluteError()
+    metrics = MetricCollection([mape, mse, mae])
     
     
     # instantiate darts model 
     log.info(f"Instantiating model <{configs.model._target_}>")
-    from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel
     model: TorchForecastingModel = instantiate(
         configs.model,
         pl_trainer_kwargs=pl_trainer_kwargs,
@@ -373,5 +441,5 @@ def inference_darts_lightning_driver_run(configs: DictConfig):
         force_reset=True,
         )
 
-    return model, data, metrics
+    return model, data_series, metrics
 

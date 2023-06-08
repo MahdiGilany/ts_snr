@@ -5,6 +5,7 @@ defaults:
   
 name: "nbeats_etth1_test"
 epochs: 1
+batch_size: 256
 seed: 1234
 save_checkpoints: True
 
@@ -23,3 +24,5 @@ model:
 new_dir: True
 
 logger: null
+
+verbose: False
