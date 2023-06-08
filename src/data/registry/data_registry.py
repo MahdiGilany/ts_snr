@@ -4,6 +4,7 @@ from typing import Union, Tuple
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from dataclasses import dataclass
+from sklearn import preprocessing
 
 from darts.datasets.dataset_loaders import DatasetLoaderCSV
 from darts.datasets import (
@@ -59,14 +60,16 @@ def create_noisy_dataset(
         test_series.time_index, np.random.randn(*test_series._xa.shape)
         )
     
+    noise_std = noise_std * np.std(train_series._xa, axis=0).values # std is relative to std of train series for each dim separately
+
     # add noise
-    train_series_noisy = train_series + (noise_mean + noise_std*train_series_noise)
-    val_series_noisy = val_series + (noise_mean + noise_std*val_series_noise)
-    test_series_noisy = test_series + (noise_mean + noise_std*test_series_noise)
+    train_series_noisy = train_series + (noise_mean + noise_std*train_series_noise._xa.values)
+    val_series_noisy = val_series + (noise_mean + noise_std*val_series_noise._xa.values)
+    test_series_noisy = test_series + (noise_mean + noise_std*test_series_noise._xa.values)
     
     # scale if needed
     if use_scaler:
-        scaler = Scaler()
+        scaler = Scaler(scaler=preprocessing.StandardScaler())
         train_series_noisy_scaled = scaler.fit_transform(train_series_noisy)
         val_series_noisy_scaled = scaler.transform(val_series_noisy)
         test_series_noisy_scaled = scaler.transform(test_series_noisy)
@@ -127,7 +130,7 @@ def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
         data_series = split_series(series, split_ratio)
         
         if use_scaler:
-            scaler = Scaler()
+            scaler = Scaler(scaler=preprocessing.StandardScaler())
             train_series_scaled = scaler.fit_transform(data_series.train_series)
             val_series_scaled = scaler.transform(data_series.val_series)
             test_series_scaled = scaler.transform(data_series.test_series)
