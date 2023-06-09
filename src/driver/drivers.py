@@ -161,10 +161,7 @@ def eval_model(
     list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
     # scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
     
-    # calculate metrics
-    # size of time series should be list of TimeSeries(n, 7, 1) but size of backtest should be list of n-1 TimeSeries(forecast_horizon, 7, 1)
-    
-    # output of calculate_metrics should be size (n-1, 7)
+    # calculate metrics    
     log.info("Calculating metrics for backtesting")
     results = calculate_metrics(
         [test_series]*len(list_backtest_series),
@@ -189,8 +186,16 @@ def eval_model(
         n_jobs=1,
         )
     
-    results = {result_name: np.vstack(results[result_name]) for result_name in results.keys()}
-    results_unscaled = {result_name: np.vstack(results_unscaled[result_name]) for result_name in results_unscaled.keys()}
+    results = {
+        result_name: np.vstack(results[result_name])
+        for result_name in results.keys()
+        if not np.isnan(np.array(results[result_name])).any()
+        }
+    results_unscaled = {
+        result_name: np.vstack(results_unscaled[result_name])
+        for result_name in results_unscaled.keys()
+        if not np.isnan(np.array(results_unscaled[result_name])).any()
+        }
     
     # print("Results of backtesting:", results)
     # print("Results of backtesting unscaled:", results_unscaled)
