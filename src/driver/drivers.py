@@ -23,6 +23,7 @@ from src.data.registry.data_registry import DataSeries
 
 from darts.timeseries import TimeSeries
 from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel, DEFAULT_DARTS_FOLDER
+from darts.utils.data.sequential_dataset import PastCovariatesSequentialDataset
 
 from tqdm import tqdm
 
@@ -43,7 +44,14 @@ def historical_forecast(
     from torch.utils.data import DataLoader
     
     # manually build test dataset and dataloader
-    test_ds = model._build_train_dataset(test_series, past_covariates=None, future_covariates=None, max_samples_per_ts=None)
+    # test_ds = model._build_train_dataset(test_series, past_covariates=None, future_covariates=None, max_samples_per_ts=None)
+    test_ds = PastCovariatesSequentialDataset(
+        test_series,
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        covariates=None,
+        use_static_covariates=False
+        )
     test_dl = DataLoader(
         test_ds,
         batch_size=model.batch_size,
@@ -68,6 +76,7 @@ def historical_forecast(
         pred = pl_model((input_series, _))
         preds.append(pred.detach().cpu())
     preds = torch.cat(preds, dim=0)
+    preds = preds.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
     
     # turn into TimeSeries
     list_backtest_series = []
