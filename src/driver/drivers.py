@@ -24,6 +24,7 @@ from src.data.registry.data_registry import DataSeries
 from darts.timeseries import TimeSeries
 from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel, DEFAULT_DARTS_FOLDER
 
+from tqdm import tqdm
 
 log = utils.get_logger(__name__)
 
@@ -40,7 +41,6 @@ def historical_forecast(
     ) -> Union[TimeSeries, List[TimeSeries]]:
     
     from torch.utils.data import DataLoader
-    from tqdm import tqdm
     
     # manually build test dataset and dataloader
     test_ds = model._build_train_dataset(test_series, past_covariates=None, future_covariates=None, max_samples_per_ts=None)
@@ -60,8 +60,8 @@ def historical_forecast(
     pl_model = model.model 
     pl_model.eval()
     preds = []
-    # one epoch of evaluation on test set
-    for batch in tqdm(test_dl, desc="evaluating on test set"):
+    # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
+    for batch in tqdm(test_dl, desc="Evaluating on test set"):
         input_series, _, _, target_series = batch
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
         target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
@@ -85,7 +85,7 @@ def eval_model(
     model: TorchForecastingModel,
     configs: DictConfig,
     data_series: DataSeries,
-    log: bool = True,
+    logging: bool = True,
     ) -> Union[Dict, DataSeries]:
     """Metrics are found based on the validation series on historical forcasts of 
     the model (using validation to predict future values, read darts documentation).
@@ -114,11 +114,10 @@ def eval_model(
     scaler = data_series.scaler
     
     # get historical forecasts
-    from darts.timeseries import concatenate
-    # test series for backtest should be noisy if available 
-    test_series_backtest = test_series if test_series_noisy is None else test_series_noisy 
+    from darts.timeseries import concatenate 
+    test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
     train_val_series_trimmed = concatenate([train_series, val_series])[-max(len(test_series_backtest),configs.model.input_chunk_length):] # TODO: this is not a good way to do it
-    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[:-configs.model.input_chunk_length], test_series_backtest])
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-configs.model.input_chunk_length:], test_series_backtest])
     # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
     
     log.info("Backtesting the model without retraining (testing on test series)")
@@ -150,37 +149,58 @@ def eval_model(
     rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     train_val_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
-    list_backtest_unscaled_series = scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
+    list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
+    # scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
     
     # calculate metrics
-    breakpoint()
     # size of time series should be list of TimeSeries(n, 7, 1) but size of backtest should be list of n-1 TimeSeries(forecast_horizon, 7, 1)
     
     # output of calculate_metrics should be size (n-1, 7)
-    results = calculate_metrics(test_series, list_backtest_series, reduction=np.array)
-    results_unscaled = calculate_metrics(test_unscaled_series, list_backtest_unscaled_series, reduction=np.array)
-    results_pred = calculate_metrics(test_series, rolling_pred[:configs.model.output_chunk_length], reduction=np.array)
+    log.info("Calculating metrics for backtesting")
+    results = calculate_metrics(
+        [test_series]*len(list_backtest_series),
+        list_backtest_series,
+        reduction=np.array,
+        verbose=True,
+        n_jobs=-1
+        )    
+    # results_unscaled = calculate_metrics(
+    #     [test_unscaled_series]*len(list_backtest_unscaled_series),
+    #     list_backtest_unscaled_series, 
+    #     reduction=np.array,
+    #     verbose=True,
+    #     n_jobs=-1
+    #     )
+    results_pred = calculate_metrics(
+        test_series,
+        rolling_pred[:configs.model.output_chunk_length],
+        reduction=np.array,
+        verbose=False,
+        n_jobs=1,
+        )
     
-    print("Results of backtesting:", results)
-    print("Results of backtesting unscaled:", results_unscaled)
+    results = {result_name: np.vstack(results[result_name]) for result_name in results.keys()}
+    # results_unscaled = {result_name: np.vstack(results_unscaled[result_name]) for result_name in results_unscaled.keys()}
+    
+    # print("Results of backtesting:", results)
+    # print("Results of backtesting unscaled:", results_unscaled)
 
     log.info("logging results to wandb")
-    
     # for visualizing backtest, we use last points only
-    backtest_unscaled_series = concatenate(list_backtest_unscaled_series)[configs.model.output_chunk_length-1::configs.model.output_chunk_length]
+    backtest_unscaled_series = concatenate([backtest_series[-1] for backtest_series in list_backtest_unscaled_series])
     
     # log best    
-    if log:
+    if logging:
         # log best historical, best historical unscaled, best pred
         wandb.log({
-            f"test_best_historical_{result_name}": results_value.mean() 
-            for result_name, results_value in results.items()
+            f"test_best_historical_{result_name}": results[result_name].mean() 
+            for result_name in results.keys()
             })
         
-        wandb.log({
-            f"test_best_historical_unscaled_{result_name}": results_value.mean()
-            for result_name, results_value in results_unscaled.items()
-            })
+        # wandb.log({
+        #     f"test_best_historical_unscaled_{result_name}": results[result_name].mean()
+        #     for result_name in results_unscaled.keys()
+        #     })
         
         wandb.log({
             f"test_best_pred_{result_name}": results_value.mean()
@@ -188,16 +208,16 @@ def eval_model(
             })
     
         # plot
-        for i, component in enumerate(test_unscaled_series.components):
+        for i, component in enumerate(test_series.components):
             wandb.log({
-                f"test_best_historical_{result_name}_{component}": results_value[..., i].mean()
-                for result_name, results_value in results.items() if not np.isnan(results_value).any()
+                f"test_best_historical_{result_name}_{component}": results[result_name][..., i].mean()
+                for result_name in results.keys() if not np.isnan(results[result_name]).any()
                 })
         
-            wandb.log({
-                f"test_best_historical_unscaled_{result_name}_{component}": results_value[..., i].mean()
-                for result_name, results_value in results_unscaled.items() if not np.isnan(results_value).any()
-                })
+            # wandb.log({
+            #     f"test_best_historical_unscaled_{result_name}_{component}": results[result_name][..., i].mean()
+            #     for result_name in results_unscaled.keys() if not np.isnan(results[result_name]).any()
+            #     })
         
             wandb.log({
                 f"test_best_pred_{result_name}_{component}": results_value[..., i].mean()
@@ -209,7 +229,7 @@ def eval_model(
             # val_unscaled_series.plot(label="val")
             train_val_series_trimmed[component].plot(label="train_val_"+ component)
             test_unscaled_series[component].plot(label="test_" + component)
-            backtest_unscaled_series[component].plot(label="backtest_" + component)
+            backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
             rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
             # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
@@ -355,7 +375,7 @@ def darts_lightning_driver_run(configs: DictConfig):
         model=model, 
         configs=configs, 
         data_series=data_series,
-        log=configs.logger!=None,
+        logging=configs.logger!=None,
         )
     
     if configs.logger is not None:
