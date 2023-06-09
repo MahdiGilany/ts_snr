@@ -164,13 +164,13 @@ def eval_model(
         verbose=True,
         n_jobs=-1
         )    
-    # results_unscaled = calculate_metrics(
-    #     [test_unscaled_series]*len(list_backtest_unscaled_series),
-    #     list_backtest_unscaled_series, 
-    #     reduction=np.array,
-    #     verbose=True,
-    #     n_jobs=-1
-    #     )
+    results_unscaled = calculate_metrics(
+        [test_unscaled_series]*len(list_backtest_unscaled_series),
+        list_backtest_unscaled_series, 
+        reduction=np.array,
+        verbose=True,
+        n_jobs=-1
+        )
     results_pred = calculate_metrics(
         test_series,
         rolling_pred[:configs.model.output_chunk_length],
@@ -180,7 +180,7 @@ def eval_model(
         )
     
     results = {result_name: np.vstack(results[result_name]) for result_name in results.keys()}
-    # results_unscaled = {result_name: np.vstack(results_unscaled[result_name]) for result_name in results_unscaled.keys()}
+    results_unscaled = {result_name: np.vstack(results_unscaled[result_name]) for result_name in results_unscaled.keys()}
     
     # print("Results of backtesting:", results)
     # print("Results of backtesting unscaled:", results_unscaled)
@@ -197,10 +197,10 @@ def eval_model(
             for result_name in results.keys()
             })
         
-        # wandb.log({
-        #     f"test_best_historical_unscaled_{result_name}": results[result_name].mean()
-        #     for result_name in results_unscaled.keys()
-        #     })
+        wandb.log({
+            f"test_best_historical_unscaled_{result_name}": results[result_name].mean()
+            for result_name in results_unscaled.keys()
+            })
         
         wandb.log({
             f"test_best_pred_{result_name}": results_value.mean()
@@ -214,10 +214,10 @@ def eval_model(
                 for result_name in results.keys() if not np.isnan(results[result_name]).any()
                 })
         
-            # wandb.log({
-            #     f"test_best_historical_unscaled_{result_name}_{component}": results[result_name][..., i].mean()
-            #     for result_name in results_unscaled.keys() if not np.isnan(results[result_name]).any()
-            #     })
+            wandb.log({
+                f"test_best_historical_unscaled_{result_name}_{component}": results[result_name][..., i].mean()
+                for result_name in results_unscaled.keys() if not np.isnan(results[result_name]).any()
+                })
         
             wandb.log({
                 f"test_best_pred_{result_name}_{component}": results_value[..., i].mean()
