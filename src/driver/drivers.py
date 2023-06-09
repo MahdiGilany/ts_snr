@@ -66,7 +66,7 @@ def historical_forecast(
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
         target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         pred = pl_model((input_series, _))
-        preds.append(pred)
+        preds.append(pred.detach().cpu())
     preds = torch.cat(preds, dim=0)
     
     # turn into TimeSeries
@@ -164,6 +164,7 @@ def eval_model(
         verbose=True,
         n_jobs=-1
         )    
+    log.info("Calculating metrics for unnormalized backtesting")
     results_unscaled = calculate_metrics(
         [test_unscaled_series]*len(list_backtest_unscaled_series),
         list_backtest_unscaled_series, 

@@ -31,8 +31,9 @@ seed=0
 batch_size=256
 epochs=300
 noise_std=0
-dataset_name="ettm2"
+dataset_name="etth2"
 new_dir=False
+verbose=False
 multiple=7
 output_chunk_length=96
 
@@ -67,7 +68,7 @@ python main.py name=$name\
             data.dataset_name=$dataset_name\
             data.noise_std=$noise_std\
             logger.wandb.group=$group\
-            verbose=False\
+            verbose=$verbose\
             id=$SLURM_JOB_ID
 
 echo "DONE"

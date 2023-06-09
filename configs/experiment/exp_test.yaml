@@ -13,7 +13,7 @@ trainer:
   check_val_every_n_epoch: 1
   
 data:
-  dataset_name: etth1
+  dataset_name: etth2
   noise_std: 0.1
 
 model:
@@ -23,6 +23,6 @@ model:
 
 new_dir: True
 
-logger: null
+# logger: null
 
-verbose: False
+verbose: True
