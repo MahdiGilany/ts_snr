@@ -8,3 +8,4 @@ noise_mean: 0
 noise_std: 0
 
 use_scaler: true
+target_series_index: null

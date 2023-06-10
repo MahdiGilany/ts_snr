@@ -122,11 +122,19 @@ def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
     def datasets_from_DatasetLoaderCSV(
         split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
         use_scaler: bool = True,
+        target_series_index: int = None,
         **kwargs
         ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
         """Creates a Darts dataset from a Darts DatasetLoaderCSV class.
         """
         series = DatasetClass().load().astype(np.float32)
+        
+        if target_series_index is not None:
+            assert target_series_index<=len(series.components), f"Target series index out of range, choose it from 0 to {len(series.components)}."
+            component = series.components[target_series_index]
+            series = series[component]
+            print(f"Using component {component} as target series.")
+        
         data_series = split_series(series, split_ratio)
         
         if use_scaler:
