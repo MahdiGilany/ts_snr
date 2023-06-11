@@ -209,17 +209,17 @@ def eval_model(
         # log best historical, best historical unscaled, best pred
         wandb.log({
             f"test_best_historical_{result_name}": results[result_name].mean() 
-            for result_name in results.keys()
+            for result_name in results.keys() if not np.isnan(results[result_name]).any()
             })
         
         wandb.log({
-            f"test_best_historical_unscaled_{result_name}": results[result_name].mean()
-            for result_name in results_unscaled.keys()
+            f"test_best_historical_unscaled_{result_name}": results_unscaled[result_name].mean()
+            for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
             })
         
         wandb.log({
             f"test_best_pred_{result_name}": results_value.mean()
-            for result_name, results_value in results_pred.items()
+            for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
             })
     
         # plot
@@ -230,8 +230,8 @@ def eval_model(
                 })
         
             wandb.log({
-                f"test_best_historical_unscaled_{result_name}_{component}": results[result_name][..., i].mean()
-                for result_name in results_unscaled.keys() if not np.isnan(results[result_name]).any()
+                f"test_best_historical_unscaled_{result_name}_{component}": results_unscaled[result_name][..., i].mean()
+                for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
                 })
         
             wandb.log({
