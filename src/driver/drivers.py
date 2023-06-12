@@ -448,7 +448,7 @@ def inference_darts_lightning_driver_run(configs: DictConfig):
             lg_conf.pop("_target_")
             logger = WandbLogger(**lg_conf, config=_config) # saves all configs
             # logger = instantiate(configs.logger, config=_config) # saves all configs
-    pl_trainer_kwargs["logger"] = logger
+            pl_trainer_kwargs["logger"] = logger
     
     
     # loading data
