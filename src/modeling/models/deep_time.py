@@ -8,6 +8,8 @@ import numpy as np
 import torch
 from torch import Tensor
 import torch.nn as nn
+from torch.optim.lr_scheduler import LambdaLR
+import math
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
@@ -84,6 +86,74 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         coords = torch.linspace(0, 1, lookback_len + horizon_len)
         return rearrange(coords, 't -> 1 t 1')
     
+    def configure_optimizers(self):
+        # self.super().configure_optimizers()
+        """configures optimizers and learning rate schedulers for model optimization."""
+
+        # Create the optimizer and (optionally) the learning rate scheduler
+        # we have to create copies because we cannot save model.parameters into object state (not serializable)
+        optimizer_kws = {k: v for k, v in self.optimizer_kwargs.items()}
+        
+        no_decay_list = ('bias', 'norm',)
+        group1_params = []  # lambda
+        group2_params = []  # no decay
+        group3_params = []  # decay
+        for param_name, param in self.named_parameters():
+            if '_lambda' in param_name:
+                group1_params.append(param)
+            elif any([mod in param_name for mod in no_decay_list]):
+                group2_params.append(param)
+            else:
+                group3_params.append(param)
+
+        list_params = [
+            {'params': group1_params, 'weight_decay': 0, 'lr': 1.0, 'scheduler': 'cosine_annealing'},
+            {'params': group2_params, 'weight_decay': 0, 'scheduler': 'cosine_annealing_with_linear_warmup'},
+            {'params': group3_params, 'scheduler': 'cosine_annealing_with_linear_warmup'}
+            ]
+        optimizer: torch.optim.optimizer.Optimizer = self.optimizer_cls(list_params, **optimizer_kws)
+    
+
+        if self.lr_scheduler_cls is not None:
+            lr_sched_kws = {k: v for k, v in self.lr_scheduler_kwargs.items()}
+            
+            # ReduceLROnPlateau requires a metric to "monitor" which must be set separately, most others do not
+            lr_monitor = lr_sched_kws.pop("monitor", None)
+            
+            eta_min = lr_sched_kws['eta_min']
+            warmup_epochs = lr_sched_kws['warmup_epochs']
+            T_max = lr_sched_kws['T_max']
+            
+            scheduler_fns = []
+            for param_group in optimizer.param_groups:
+                scheduler = param_group['scheduler']
+                
+                if scheduler == 'none':
+                    fn = lambda T_cur: 1
+                    
+                elif scheduler == 'cosine_annealing':
+                    lr = eta_max = param_group['lr']
+                    fn = lambda T_cur: (eta_min + 0.5 * (eta_max - eta_min) * (
+                                1.0 + math.cos((T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
+                    
+                elif scheduler == 'cosine_annealing_with_linear_warmup':
+                    lr = eta_max = param_group['lr']
+                    fn = lambda T_cur: T_cur / warmup_epochs if T_cur < warmup_epochs else (eta_min + 0.5 * (
+                                eta_max - eta_min) * (1.0 + math.cos(
+                        (T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
+                    
+                else:
+                    raise ValueError(f'No such scheduler, {scheduler}')
+                
+                scheduler_fns.append(fn)
+            lr_scheduler = LambdaLR(optimizer=optimizer, lr_lambda=scheduler_fns)
+            
+            return [optimizer], {
+                "scheduler": lr_scheduler,
+                "monitor": lr_monitor if lr_monitor is not None else "val_loss",
+            }
+        else:
+            return optimizer
     
 class DeepTIMeModel(PastCovariatesTorchModel):
     def __init__(

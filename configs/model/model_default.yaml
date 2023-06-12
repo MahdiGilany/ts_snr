@@ -18,7 +18,7 @@ optimizer_kwargs:
 # scheduler
 lr_scheduler_cls:
   _target_: hydra.utils.get_class
-  path: src.modeling.registry.optimizer_scheduler.CosineAnnealingWithLinearWarmup
+  path: src.modeling.registry.optimizer_scheduler.CosineAnnealingWithLinearWarmup # TODO: for deeptime this is set automatically, and just T_max, eta_min and warmup_epochs are used
 lr_scheduler_kwargs:
   T_max: ${epochs}
   eta_min: 0.0
