@@ -57,3 +57,22 @@ def deeptime(
         **kwargs
         )
     return model
+
+
+@register_model
+def OMPdeeptime(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from ..models.omp_deeptime import OMPDeepTIMeModel
+    model = OMPDeepTIMeModel(
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        random_state=random_state,
+        batch_size=batch_size,
+        **kwargs
+        )
+    return model
