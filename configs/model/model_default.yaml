@@ -18,11 +18,11 @@ optimizer_kwargs:
 # scheduler
 lr_scheduler_cls:
   _target_: hydra.utils.get_class
-  path: src.modeling.registry.optimizer_scheduler.CosineAnnealingWithLinearWarmup # TODO: for deeptime this is set automatically, and just T_max, eta_min and warmup_epochs are used
+  path: src.modeling.registry.optimizer_scheduler.LambdaLRWrapper
 lr_scheduler_kwargs:
   T_max: ${epochs}
   eta_min: 0.0
-  eta_max: 1.0
+  eta_max: ${model.optimizer_kwargs.lr}
   warmup_epochs: 5
   wandb_log: ${logger} # TODO: this might make offline loading problematic
 

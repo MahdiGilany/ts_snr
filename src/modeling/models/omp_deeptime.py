@@ -145,7 +145,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
                     raise ValueError(f'No such scheduler, {scheduler}')
                 
                 scheduler_fns.append(fn)
-            lr_scheduler = LambdaLR(optimizer=optimizer, lr_lambda=scheduler_fns)
+            lr_scheduler = self.lr_scheduler_cls(optimizer=optimizer, lr_lambda=scheduler_fns)
             
             return [optimizer], {
                 "scheduler": lr_scheduler,
