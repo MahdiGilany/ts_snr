@@ -26,7 +26,7 @@ def norm2(y):
 class _OrthogonalMatchingPursuit(nn.Module):
     def __init__(
         self,
-        stop: int = 500,
+        stop: int = 256,
         r_thresh: float = 0.01,
         lambda_init: Optional[float] = -15.,
         n_nonzero_coefs: Optional[int] = None,
@@ -37,13 +37,13 @@ class _OrthogonalMatchingPursuit(nn.Module):
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.r_thresh = r_thresh
-        self.stop = stop
+        # self.stop = stop + 1
         
     # def fit(self, dict: Tensor, y: Tensor):
     #     self.coef = []
+        # self.omp = OrthogonalMatchingPursuit(n_nonzero_coefs=self.n_nonzero_coefs)
     #     # for i in tqdm(range(dict.shape[0]), desc='OMP fitting'):
     #     for i in range(dict.shape[0]):
-    #         self.omp = OrthogonalMatchingPursuit(n_nonzero_coefs=self.n_nonzero_coefs, tol=0.01)
     #         self.omp.fit(dict[i,...].detach().cpu().numpy(), y[i,...].detach().cpu().numpy())
     #         coef = torch.tensor(self.omp.coef_).to(device=dict.device, dtype=dict.dtype)
     #         self.coef.append(coef.unsqueeze(-1))
@@ -85,7 +85,7 @@ class _OrthogonalMatchingPursuit(nn.Module):
         i = 0
         tolerance = True
         # Control stop interation with norm thresh or sparsity
-        while tolerance and i<self.stop: # TODO: norm is the mean over all the batch which shouldn't be         
+        while tolerance and i<self.n_nonzero_coefs: # TODO: norm is the mean over all the batch which shouldn't be         
             # Compute the score of each atoms
             scores = torch.bmm(dict.mT, r) # (batch_sz, input_dim, 1)
             scores = scores.detach().cpu().numpy()
@@ -133,7 +133,7 @@ class _OrthogonalMatchingPursuit(nn.Module):
             i += 1
             norm_r = norm2(r)
             tolerance = (norm_r > self.r_thresh).any()
-        return weights, Lambdas
+        return weights, Lambdas_array
     
     @property
     def reg_coeff(self) -> Tensor:
