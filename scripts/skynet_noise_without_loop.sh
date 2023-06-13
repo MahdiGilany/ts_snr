@@ -58,10 +58,10 @@ done
 
 # set name, group, and input chunk length
 input_chunk_length=$((output_chunk_length * multiple))
-group="${experiment}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
+group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
 name="${group}_seed${seed}"
 
-echo "seed ${seed} and noise std ${noise_std} experiment ${experiment}"
+echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
             experiment=$experiment\
             seed=$seed\
