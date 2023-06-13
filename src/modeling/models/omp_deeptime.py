@@ -36,7 +36,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        n_nonzero_coefs: int = 10,
+        n_nonzero_coefs: int = 150,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -164,7 +164,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
-        n_nonzero_coefs: int = 10,
+        n_nonzero_coefs: int = 150,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))

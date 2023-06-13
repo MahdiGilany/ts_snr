@@ -1,4 +1,4 @@
-'''Copied from https://github.com/salesforce/DeepTime/tree/main #TODO: add to this
+'''Modified from https://github.com/salesforce/DeepTime/tree/main #TODO: add to this
 '''
 
 # Copyright (c) 2022, salesforce.com, inc.
@@ -19,83 +19,124 @@ from sklearn.linear_model import OrthogonalMatchingPursuitCV
 
 from tqdm import tqdm
 
-def norm2(x):
-    return torch.sqrt(torch.sum([i**2 for i in x]))
+def norm2(y):
+    return torch.sqrt(torch.sum(y**2, dim=(1,2)))
 
 
 class _OrthogonalMatchingPursuit(nn.Module):
-    def __init__(self, n_nonzero_coefs: Optional[int] = None):
+    def __init__(
+        self,
+        stop: int = 500,
+        r_thresh: float = 0.01,
+        lambda_init: Optional[float] = -15.,
+        n_nonzero_coefs: Optional[int] = None,
+        ):
         super().__init__()
-        self.omp = OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
-        self.r_thresh = 0.01
-        self.stop = np.inf
+        
+        self._lambda = torch.as_tensor(lambda_init, dtype=torch.float)
+
         self.n_nonzero_coefs = n_nonzero_coefs
-    # def fit(self, dictionary: Tensor, y: Tensor):
+        self.r_thresh = r_thresh
+        self.stop = stop
+        
+    # def fit(self, dict: Tensor, y: Tensor):
     #     self.coef = []
-    #     # for i in tqdm(range(dictionary.shape[0]), desc='OMP fitting'):
-    #     for i in range(dictionary.shape[0]):
-    #         self.omp.fit(dictionary[i,...].detach().cpu().numpy(), y[i,...].detach().cpu().numpy())
-    #         coef = torch.tensor(self.omp.coef_).to(device=dictionary.device, dtype=dictionary.dtype)
+    #     # for i in tqdm(range(dict.shape[0]), desc='OMP fitting'):
+    #     for i in range(dict.shape[0]):
+    #         self.omp = OrthogonalMatchingPursuit(n_nonzero_coefs=self.n_nonzero_coefs, tol=0.01)
+    #         self.omp.fit(dict[i,...].detach().cpu().numpy(), y[i,...].detach().cpu().numpy())
+    #         coef = torch.tensor(self.omp.coef_).to(device=dict.device, dtype=dict.dtype)
     #         self.coef.append(coef.unsqueeze(-1))
     #     self.coef = torch.stack(self.coef, dim=0)
     #     return self.coef
     
-    def fit(self, dictionary: Tensor, y: Tensor):
-        return self.OMP(dictionary, y)
+    def fit(self, dict: Tensor, y: Tensor):
+        self.coef, _ = self.OMP(dict, y)
+        return self.coef
     
-    def forward(self, dictionary: Tensor, coef: Tensor = None) -> Tensor:
+    def forward(self, X: Tensor, coef: Tensor = None) -> Tensor:
         if coef is None:
             coef = self.coef
-        return torch.bmm(dictionary, coef)
         
-    def OMP(self, dictionary: Tensor, y: Tensor):
+        # adding bias term
+        ones = torch.ones(X.shape[0], X.shape[1], 1, device=X.device)
+        dict = torch.concat([X, ones], dim=-1)
+        
+        return torch.bmm(dict, coef)
+        
+    def OMP(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         :args
         A: measurement matrix
         y: 
         '''
+        # bias added
+        ones = torch.ones(X.shape[0], X.shape[1], 1, device=X.device)
+        dict = torch.concat([X, ones], dim=-1)
+        
+        batch_sz, n_samples, input_dim = dict.shape
+        batch_sz, n_samples, output_dim = y.shape
+        
+        assert output_dim == 1, 'OMP only supports single output so far'
+        
         r = y
-        x_pre = torch.zeros(self.n_nonzero_coefs)
+        weights = torch.zeros(batch_sz, input_dim, output_dim).to(device=dict.device, dtype=dict.dtype)
         Lambdas = []
         i = 0
+        tolerance = True
         # Control stop interation with norm thresh or sparsity
-        while norm2(r)>self.r_thresh and i<self.stop:
-        
+        while tolerance and i<self.stop: # TODO: norm is the mean over all the batch which shouldn't be         
             # Compute the score of each atoms
-            scores = dictionary.T.dot(r)
+            scores = torch.bmm(dict.mT, r) # (batch_sz, input_dim, 1)
+            scores = scores.detach().cpu().numpy()
             
             # Select the atom with the max score
-            Lambda = torch.argmax(abs(scores))
+            Lambda = np.argmax(abs(scores), axis=1)
             # print(Lambda)
             Lambdas.append(Lambda)
+            Lambdas_array = np.array(Lambdas) # (n_selected_atoms, batch_sz, 1)
             
             # All selected atoms form a basis
-            basis = dictionary[:,Lambdas]
+            basis = [] # (batch_sz, n_lambdas, input_dim)
+            for j in range(batch_sz):
+                basis.append(dict[j, :, Lambdas_array[:,j,0]])
+            basis = torch.stack(basis, dim=0)
 
             # Least square solution for y=Ax
-            x_pre[Lambdas] = torch.linalg.inv(torch.dot(basis.T,basis)).dot(basis.T).dot(y)
+            # inv_basiss = torch.linalg.inv(torch.bmm(basis.mT, basis))
+            # B = torch.bmm(basis.mT, y)
+            # # inv_basiss.diagonal(dim1=-2, dim2=-1).add_(1e-2)
+            # w = torch.bmm(inv_basiss, B)
+            # for j in range(batch_sz):
+            #     weights[j, Lambdas_array[:,j,0], 0] = w[j, :, :].squeeze()
             
-            # A = torch.bmm(basis.mT, basis)
-            # A.diagonal(dim1=-2, dim2=-1).add_(reg_coeff)
-            # B = torch.bmm(X.mT, Y)
-            # weights = torch.linalg.solve(A, B)
-        
-            # if n_samples >= n_dim:
-            #     # standard
-            #     A = torch.bmm(X.mT, X)
-            #     A.diagonal(dim1=-2, dim2=-1).add_(reg_coeff)
-            #     B = torch.bmm(X.mT, Y)
-            #     weights = torch.linalg.solve(A, B)
-            # else:
-            #     # Woodbury
-            #     A = torch.bmm(X, X.mT)
-            #     A.diagonal(dim1=-2, dim2=-1).add_(reg_coeff)
-            #     weights = torch.bmm(X.mT, torch.linalg.solve(A, Y))
+            
+            if n_samples >= input_dim:
+                # standard
+                A = torch.bmm(basis.mT, basis)
+                A.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff)
+                B = torch.bmm(basis.mT, y)
+                w = torch.linalg.solve(A, B)
+                for j in range(batch_sz):
+                    weights[j, Lambdas_array[:,j,0], 0] = w[j, :, :].squeeze()
+            else:
+                # Woodbury
+                A = torch.bmm(basis, basis.mT)
+                A.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff)
+                w = torch.bmm(basis.mT, torch.linalg.solve(A, y))
+                for j in range(batch_sz):
+                    weights[j, Lambdas_array[:,j,0], 0] = w[j, :, :].squeeze()
             
             # Compute the residual
-            r = y - dictionary.dot(x_pre)
+            r = y - torch.bmm(dict, weights)
             
             i += 1
-        return x_pre.T, Lambdas
+            norm_r = norm2(r)
+            tolerance = (norm_r > self.r_thresh).any()
+        return weights, Lambdas
     
+    @property
+    def reg_coeff(self) -> Tensor:
+        return F.softplus(self._lambda)
+
   
