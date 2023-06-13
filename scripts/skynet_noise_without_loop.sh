@@ -2,6 +2,8 @@
 
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
+#SBATCH --time=0-12:00:00
+#SBATCH --exclude=compute1080ti06,compute1080ti08
 #SBATCH -c 16 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -25,14 +27,17 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=Slurm
-experiment="nbeats"
+version=Slurm_test_noise_0.0
+experiment="exp_default"
+model_name="deeptime"
 seed=0
 batch_size=256
-epochs=300
-noise_std=0
+epochs=100
+lr=0.001
 dataset_name="etth2"
-new_dir=False
+noise_std=0.0
+target_series_index=6
+new_dir=True
 verbose=False
 multiple=7
 output_chunk_length=96
@@ -63,10 +68,13 @@ python main.py name=$name\
             batch_size=$batch_size\
             epochs=$epochs\
             new_dir=$new_dir\
+            model.model_name=$model_name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
+            model.optimizer_kwargs.lr=$lr\
             data.dataset_name=$dataset_name\
             data.noise_std=$noise_std\
+            data.target_series_index=$target_series_index\
             logger.wandb.group=$group\
             verbose=$verbose\
             id=$SLURM_JOB_ID
