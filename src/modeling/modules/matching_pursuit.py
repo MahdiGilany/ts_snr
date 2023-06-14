@@ -33,7 +33,7 @@ class _OrthogonalMatchingPursuit(nn.Module):
         ):
         super().__init__()
         
-        self._lambda = torch.as_tensor(lambda_init, dtype=torch.float)
+        self._lambda = torch.as_tensor(lambda_init, dtype=torch.float) # lambda is fixed and doesn't get updated during training
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.r_thresh = r_thresh
@@ -85,7 +85,7 @@ class _OrthogonalMatchingPursuit(nn.Module):
         i = 0
         tolerance = True
         # Control stop interation with norm thresh or sparsity
-        while tolerance and i<self.n_nonzero_coefs: # TODO: norm is the mean over all the batch which shouldn't be         
+        while tolerance and i<self.n_nonzero_coefs: 
             # Compute the score of each atoms
             scores = torch.bmm(dict.mT, r) # (batch_sz, input_dim, 1)
             scores = scores.detach().cpu().numpy()
