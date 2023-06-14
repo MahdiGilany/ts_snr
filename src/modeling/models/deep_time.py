@@ -146,7 +146,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
                     raise ValueError(f'No such scheduler, {scheduler}')
                 
                 scheduler_fns.append(fn)
-            lr_scheduler = self.lr_scheduler_cls(optimizer=optimizer, lr_lambda=scheduler_fns)
+            lr_scheduler = self.lr_scheduler_cls(optimizer=optimizer, lr_lambda=scheduler_fns, wandb_log=lr_sched_kws['wandb_log'])
             
             return [optimizer], {
                 "scheduler": lr_scheduler,
