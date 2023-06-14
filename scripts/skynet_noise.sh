@@ -2,7 +2,7 @@
 
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
-#SBATCH --time=0-12:00:00
+#SBATCH --time=1-01:00:00
 #SBATCH --exclude=compute1080ti06,compute1080ti08
 #SBATCH -c 16 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
@@ -56,8 +56,8 @@ done
 # run experiment
 # python scripts/test.py
 
-# for noise_std in 0 .1 .3 .5 .7 .9 2.0
-# do
+for noise_std in 0 0.1 0.3 0.5 0.7 0.9 #1.1 1.3 1.5 2.0
+do
 
 for seed in {0..4}
 do
@@ -84,6 +84,7 @@ python main.py name=$name\
             logger.wandb.group=$group\
             verbose=$verbose\
             id=$SLURM_JOB_ID
+done
 done
 
 echo "DONE"
