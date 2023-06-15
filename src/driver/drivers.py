@@ -154,8 +154,12 @@ def eval_model(
     # scale back series
     # train_unscaled_series = scaler.inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
     # val_unscaled_series = scaler.inverse_transform(val_series) if scaler else val_series
-    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(10*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
+    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(3*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
+    rolling_pred_middle = model.predict(series=train_val_test_series_trimmed[:2*len(train_val_test_series_trimmed)//3], n=min(3*configs.model.output_chunk_length, len(test_series))) 
+    rolling_pred_end = model.predict(series=train_val_test_series_trimmed, n=min(3*configs.model.output_chunk_length, len(test_series))) 
     rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
+    rolling_unscaled_pred_middle = scaler.inverse_transform(rolling_pred_middle) if scaler else rolling_pred_middle
+    rolling_unscaled_pred_end = scaler.inverse_transform(rolling_pred_end) if scaler else rolling_pred_end
     train_val_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
     list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
@@ -185,6 +189,21 @@ def eval_model(
         verbose=False,
         n_jobs=1,
         )
+    results_pred_middle = calculate_metrics(
+        test_series,
+        rolling_pred_middle[:configs.model.output_chunk_length],
+        reduction=np.array,
+        verbose=False,
+        n_jobs=1,
+    )
+    results_pred_end = calculate_metrics(
+        test_series,
+        rolling_pred_end[:configs.model.output_chunk_length],
+        reduction=np.array,
+        verbose=False,
+        n_jobs=1,
+    )
+    
     
     results = {
         result_name: np.vstack(results[result_name])
@@ -197,8 +216,6 @@ def eval_model(
         if not np.isnan(np.array(results_unscaled[result_name])).any()
         }
     
-    # print("Results of backtesting:", results)
-    # print("Results of backtesting unscaled:", results_unscaled)
 
     # for visualizing backtest, we use last points only
     backtest_unscaled_series = concatenate([backtest_series[-1] for backtest_series in list_backtest_unscaled_series])
@@ -220,6 +237,16 @@ def eval_model(
         wandb.log({
             f"test_best_pred_{result_name}": results_value.mean()
             for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
+            })
+        
+        wandb.log({
+            f"test_best_pred_middle_{result_name}": results_value.mean()
+            for result_name, results_value in results_pred_middle.items() if not np.isnan(results_value).any()
+            })
+        
+        wandb.log({
+            f"test_best_pred_end_{result_name}": results_value.mean()
+            for result_name, results_value in results_pred_end.items() if not np.isnan(results_value).any()
             })
     
         # plot
@@ -246,6 +273,8 @@ def eval_model(
             test_unscaled_series[component].plot(label="test_" + component)
             backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
             rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
+            rolling_unscaled_pred_middle[component].plot(label="rolling_pred_middle_" + component)
+            rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
             # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
     return results, list_backtest_series
