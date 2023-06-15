@@ -115,6 +115,11 @@ def eval_model(
     #load model    
     model.load_from_checkpoint(model_name=configs.model.model_name) # TODO: needs work if not using wandb or not after training
     
+    # input and output chunk length
+    input_chunk_length = configs.model.input_chunk_length
+    output_chunk_length = configs.model.output_chunk_length
+    
+    
     # get series from data_series
     train_series = data_series.train_series
     val_series = data_series.val_series
@@ -125,17 +130,20 @@ def eval_model(
     # get historical forecasts
     from darts.timeseries import concatenate 
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
-    train_val_series_trimmed = concatenate([train_series, val_series])[-max(len(test_series_backtest),configs.model.input_chunk_length):] # TODO: this is not a good way to do it
-    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-configs.model.input_chunk_length:], test_series_backtest])
-    # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
-    
+    num_trimmed_train_val = max(len(test_series_backtest),input_chunk_length)
+    train_val_series_trimmed = concatenate([train_series, val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest])
+
     log.info("Backtesting the model without retraining (testing on test series)")
     list_backtest_series = historical_forecast(
         model=model,
         test_series=train_val_test_series_trimmed,
-        input_chunk_length=configs.model.input_chunk_length,
-        output_chunk_length=configs.model.output_chunk_length,
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
         )
+    
+    ##################### OLD CODE #####################
+    # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
     # backtest_series = model.historical_forecasts( # it is not parallelized!!!!!!!!!!!!!!!!!!!!!
     #     train_val_test_series_trimmed,
     #     start=test_series_backtest.start_time(),
@@ -149,14 +157,24 @@ def eval_model(
     # if isinstance(backtest_series, List):
     #     assert stride == configs.model.output_chunk_length, "stride should be equal to output_chunk_length, otherwise not implemented yet"
     #     backtest_series = concatenate(backtest_series)
+    #####################################################
     
+    # rollinig predictions
+    lengths_preds = min(3*output_chunk_length, len(test_series))
+    rolling_pred = model.predict(
+        series=train_val_series_trimmed,
+        n=lengths_preds
+        ) # assumed val_series is bigger than input_chunk_length
+    rolling_pred_middle = model.predict(
+        series=train_val_test_series_trimmed[:2*len(train_val_test_series_trimmed)//3],
+        n=lengths_preds
+        ) 
+    rolling_pred_end = model.predict(
+        series=train_val_test_series_trimmed,
+        n=lengths_preds
+        ) 
     
-    # scale back series
-    # train_unscaled_series = scaler.inverse_transform(train_series) if scaler else train_series # TODO: check if scaler is None for use_scaler=False
-    # val_unscaled_series = scaler.inverse_transform(val_series) if scaler else val_series
-    rolling_pred = model.predict(series=train_val_series_trimmed, n=min(3*configs.model.output_chunk_length, len(test_series))) # assumed val_series is bigger than input_chunk_length
-    rolling_pred_middle = model.predict(series=train_val_test_series_trimmed[:2*len(train_val_test_series_trimmed)//3], n=min(3*configs.model.output_chunk_length, len(test_series))) 
-    rolling_pred_end = model.predict(series=train_val_test_series_trimmed, n=min(3*configs.model.output_chunk_length, len(test_series))) 
+    # unnormalize series
     rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     rolling_unscaled_pred_middle = scaler.inverse_transform(rolling_pred_middle) if scaler else rolling_pred_middle
     rolling_unscaled_pred_end = scaler.inverse_transform(rolling_pred_end) if scaler else rolling_pred_end
@@ -219,7 +237,6 @@ def eval_model(
         if not np.isnan(np.array(results_unscaled[result_name])).any()
         }
     
-
     # for visualizing backtest, we use last points only
     backtest_unscaled_series = concatenate([backtest_series[-1] for backtest_series in list_backtest_unscaled_series])
     
