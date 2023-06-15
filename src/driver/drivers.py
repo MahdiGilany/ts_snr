@@ -174,6 +174,7 @@ def eval_model(
         verbose=True,
         n_jobs=-1
         )    
+    
     log.info("Calculating metrics for unnormalized backtesting")
     results_unscaled = calculate_metrics(
         [test_unscaled_series]*len(list_backtest_unscaled_series),
@@ -182,6 +183,8 @@ def eval_model(
         verbose=True,
         n_jobs=-1
         )
+    
+    log.info("Calculating metrics for rolling predictions")
     results_pred = calculate_metrics(
         test_series,
         rolling_pred[:configs.model.output_chunk_length],
