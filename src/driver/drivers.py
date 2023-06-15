@@ -30,10 +30,6 @@ from tqdm import tqdm
 log = utils.get_logger(__name__)
 
 
-def train_model():
-    ...
-
-
 def historical_forecast(
     model: TorchForecastingModel,
     test_series: TimeSeries,
