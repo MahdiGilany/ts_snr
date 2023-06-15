@@ -162,7 +162,7 @@ def eval_model(
         n=lengths_preds
         ) # assumed val_series is bigger than input_chunk_length
     rolling_pred_middle = model.predict(
-        series=train_val_test_series_trimmed[:2*len(train_val_test_series_trimmed)//3],
+        series=train_val_test_series_trimmed[:3*len(train_val_test_series_trimmed)//4],
         n=lengths_preds
         ) 
     rolling_pred_end = model.predict(
