@@ -213,13 +213,6 @@ def eval_model(
         verbose=False,
         n_jobs=1,
     )
-    results_pred_end = calculate_metrics(
-        test_series,
-        rolling_pred_end[:configs.model.output_chunk_length],
-        reduction=np.array,
-        verbose=False,
-        n_jobs=1,
-    )
     
     
     results = {
@@ -260,11 +253,6 @@ def eval_model(
             for result_name, results_value in results_pred_middle.items() if not np.isnan(results_value).any()
             })
         
-        wandb.log({
-            f"test_best_pred_end_{result_name}": results_value.mean()
-            for result_name, results_value in results_pred_end.items() if not np.isnan(results_value).any()
-            })
-    
         # plot
         for i, component in enumerate(test_series.components):
             wandb.log({
