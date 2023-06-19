@@ -254,7 +254,10 @@ def eval_model(
             })
         
         # plot
-        for i, component in enumerate(test_series.components):
+        for i, component in reversed(list(enumerate(test_series.components))):
+            if i<(len(test_series.components)-10): # only plot 10 components
+                break
+            
             wandb.log({
                 f"test_best_historical_{result_name}_{component}": results[result_name][..., i].mean()
                 for result_name in results.keys() if not np.isnan(results[result_name]).any()
@@ -270,18 +273,18 @@ def eval_model(
                 for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
                 })
             
-            if i>(len(test_series.components)-11):
-                plt.figure(figsize=(5, 3))
-                # train_unscaled_series.plot(label="train")
-                # val_unscaled_series.plot(label="val")
-                train_val_series_trimmed[component].plot(label="train_val_"+ component)
-                test_unscaled_series[component].plot(label="test_" + component)
-                backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
-                rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
-                rolling_unscaled_pred_middle[component].plot(label="rolling_pred_middle_" + component)
-                rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
-                # plt.title(configs.model.model_name + configs.data.dataset_name + component)
-                wandb.log({"Media": plt})
+            
+            plt.figure(figsize=(5, 3))
+            # train_unscaled_series.plot(label="train")
+            # val_unscaled_series.plot(label="val")
+            train_val_series_trimmed[component].plot(label="train_val_"+ component)
+            test_unscaled_series[component].plot(label="test_" + component)
+            backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
+            rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
+            rolling_unscaled_pred_middle[component].plot(label="rolling_pred_middle_" + component)
+            rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
+            # plt.title(configs.model.model_name + configs.data.dataset_name + component)
+            wandb.log({"Media": plt})
     return results, list_backtest_series
                 
     
