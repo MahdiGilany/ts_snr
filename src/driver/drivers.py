@@ -136,7 +136,7 @@ def eval_model(
         test_series=train_val_test_series_trimmed,
         input_chunk_length=input_chunk_length,
         output_chunk_length=output_chunk_length,
-        )
+        ) # size = (len(test_series_backtest), output_chunk_length, outdim)
     
     ##################### OLD CODE #####################
     # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
@@ -174,7 +174,7 @@ def eval_model(
     rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
     rolling_unscaled_pred_middle = scaler.inverse_transform(rolling_pred_middle) if scaler else rolling_pred_middle
     rolling_unscaled_pred_end = scaler.inverse_transform(rolling_pred_end) if scaler else rolling_pred_end
-    train_val_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
+    train_val_unscaled_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
     list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
     # scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
@@ -188,6 +188,16 @@ def eval_model(
         verbose=True,
         n_jobs=-1
         )    
+    
+    if test_series_noisy is not None:
+        log.info("Calculating metrics for backtesting using noisy test")
+        results_noisy = calculate_metrics(
+            [test_series_noisy]*len(list_backtest_series),
+            list_backtest_series,
+            reduction=np.array,
+            verbose=True,
+            n_jobs=-1
+            )
     
     log.info("Calculating metrics for unnormalized backtesting")
     results_unscaled = calculate_metrics(
@@ -220,6 +230,11 @@ def eval_model(
         for result_name in results.keys()
         if not np.isnan(np.array(results[result_name])).any()
         }
+    results_noisy = {
+        result_name: np.vstack(results_noisy[result_name])
+        for result_name in results_noisy.keys()
+        if not np.isnan(np.array(results_noisy[result_name])).any()
+        }
     results_unscaled = {
         result_name: np.vstack(results_unscaled[result_name])
         for result_name in results_unscaled.keys()
@@ -236,6 +251,11 @@ def eval_model(
         wandb.log({
             f"test_best_historical_{result_name}": results[result_name].mean() 
             for result_name in results.keys() if not np.isnan(results[result_name]).any()
+            })
+        
+        wandb.log({
+            f"test_best_historical_noisy_{result_name}": results_noisy[result_name].mean()
+            for result_name in results_noisy.keys() if not np.isnan(results_noisy[result_name]).any()
             })
         
         wandb.log({
@@ -275,9 +295,7 @@ def eval_model(
             
             
             plt.figure(figsize=(5, 3))
-            # train_unscaled_series.plot(label="train")
-            # val_unscaled_series.plot(label="val")
-            train_val_series_trimmed[component].plot(label="train_val_"+ component)
+            train_val_unscaled_series_trimmed[component].plot(label="train_val_"+ component)
             test_unscaled_series[component].plot(label="test_" + component)
             backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
             rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
@@ -285,6 +303,20 @@ def eval_model(
             rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
             # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
+            
+            # plot scaled version and a couple of predictions
+            if i==0:
+                plt.figure(figsize=(5, 3))
+                train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component)
+                test_series_backtest[component].plot(label="scaled_noisy_test_" + component)
+                [
+                    series.plot(label="pred_" + component)
+                    for i, series in enumerate(list_backtest_series)
+                    if i%output_chunk_length==0
+                 ]
+                wandb.log({"Media": plt})
+                breakpoint()
+                
     return results, list_backtest_series
                 
     

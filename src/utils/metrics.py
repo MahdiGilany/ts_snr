@@ -56,15 +56,15 @@ def calculate_metrics(true, pred, **kwargs):
     except:
         _smape = torch.tensor(np.nan)
     
-    try:
-        _ope = ope(true, pred, **kwargs)
-    except:
-        _ope = torch.tensor(np.nan)
+    # try:
+    #     _ope = ope(true, pred, **kwargs)
+    # except:
+    #     _ope = torch.tensor(np.nan)
         
-    try:
-        _mase = mase(true, pred, **kwargs)
-    except:
-        _mase = torch.tensor(np.nan)
+    # try:
+    #     _mase = mase(true, pred, **kwargs)
+    # except:
+    #     _mase = torch.tensor(np.nan)
     
     try:
         _r2 = r2_score(true, pred, **kwargs)
@@ -76,8 +76,8 @@ def calculate_metrics(true, pred, **kwargs):
             'rmse': _rmse,
             'mape': _mape,
             'smape': _smape,
-            'ope': _ope,
-            'mase': _mase,
+            # 'ope': _ope,
+            # 'mase': _mase,
             'r2': _r2,
             }
     
