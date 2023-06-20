@@ -307,15 +307,14 @@ def eval_model(
             # plot scaled version and a couple of predictions
             if i==0:
                 plt.figure(figsize=(5, 3))
-                train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component)
-                test_series_backtest[component].plot(label="scaled_noisy_test_" + component)
+                train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
+                test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
                 [
                     series.plot(label="pred_" + component)
                     for i, series in enumerate(list_backtest_series)
                     if i%output_chunk_length==0
                  ]
                 wandb.log({"Media": plt})
-                breakpoint()
                 
     return results, list_backtest_series
                 
