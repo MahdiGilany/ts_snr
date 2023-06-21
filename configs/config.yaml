@@ -22,7 +22,7 @@
 defaults:
   - _self_
   - log_dir: logdir_default
-  - driver: pl_driver_default
+  - driver: globalforecasting_driver_default
   - experiment: null
 
   # optional local config for machine/user specific settings

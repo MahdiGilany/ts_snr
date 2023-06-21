@@ -56,7 +56,8 @@ def main(config):
     config = maybe_resume_previous_run(config)
     pprint(OmegaConf.to_object(config))
 
-    out = drivers.darts_lightning_driver_run(config) # we can instantiate driver instead later
+    driver = instantiate(config.driver)
+    out = driver(config)
 
     return out
 

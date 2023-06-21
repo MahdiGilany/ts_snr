@@ -29,7 +29,7 @@ def nbeats(
     batch_size: int = 32,
     **kwargs,
     ):
-    from darts.models.forecasting.nbeats import NBEATSModel
+    from darts.models import NBEATSModel
     model = NBEATSModel(
         input_chunk_length=input_chunk_length,
         output_chunk_length=output_chunk_length,
@@ -75,4 +75,90 @@ def OMPdeeptime(
         batch_size=batch_size,
         **kwargs
         )
+    return model    
+    
+
+@register_model
+def nhits(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0, 
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import NHiTSModel
+    model = NHiTSModel(
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        random_state=random_state,
+        batch_size=batch_size,
+        **kwargs
+        )
     return model
+
+
+@register_model
+def nlinear(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0, 
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import NLinearModel
+    model = NLinearModel(
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        random_state=random_state,
+        batch_size=batch_size,
+        **kwargs
+        )
+    return model
+
+
+@register_model
+def dlinear(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0, 
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import DLinearModel
+    model = DLinearModel(
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        random_state=random_state,
+        batch_size=batch_size,
+        **kwargs
+        )
+    return model
+
+
+@register_model
+def naive(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    add_drift: bool = False,
+    regression_ensemble: bool = False,
+    **kwargs,
+    ):
+    from darts.models import NaiveSeasonal, NaiveDrift, NaiveEnsembleModel, RegressionEnsembleModel
+    model_seasonality = NaiveSeasonal(
+        K=input_chunk_length,
+    )
+    
+    if regression_ensemble and not add_drift:
+        raise ValueError("Regression ensemble only works with drift.")
+        
+    if add_drift:
+        model_drift = NaiveDrift()
+        model = NaiveEnsembleModel([model_seasonality, model_drift]) if not regression_ensemble else RegressionEnsembleModel(
+            [model_seasonality, model_drift],
+            regression_train_n_points=input_chunk_length,
+            )
+        return model       
+    
+    return model_seasonality

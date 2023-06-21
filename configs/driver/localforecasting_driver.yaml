@@ -5,8 +5,8 @@ _recursive_: false # recursive instantiation while using hydra.util.instantiate.
 #https://hydra.cc/docs/advanced/instantiate_objects/overview/#recursive-instantiation 
 
 defaults:
-  - /model: model_default
-  - /data: data_default
-  - /logger: wandb_lightning # / "slash" is for recognizing logger folder in previous folder 
+  - driver_default
 
-verbose: true
+driver:
+  _target_: hydra.utils.get_method
+  path: src.driver.drivers.darts_localforecasting_driver_run
