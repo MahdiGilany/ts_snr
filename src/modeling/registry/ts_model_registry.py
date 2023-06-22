@@ -136,7 +136,7 @@ def dlinear(
 
 
 @register_model
-def naive(
+def naive_seasonal(
     input_chunk_length: int = 24,
     output_chunk_length: int = 12,
     random_state: int = 0,
@@ -162,3 +162,59 @@ def naive(
         return model       
     
     return model_seasonality
+
+
+@register_model
+def naive_mean(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import NaiveMean
+    model = NaiveMean()
+    return model
+
+
+@register_model
+def naive_arma(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import NaiveMovingAverage
+    model = NaiveMovingAverage(input_chunk_length=input_chunk_length)
+    return model
+
+
+@register_model
+def arima(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    d: int = 0,
+    q: int = 24,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import ARIMA
+    model = ARIMA(p=input_chunk_length, d=d, q=q, random_state=random_state)
+    return model
+
+
+@register_model
+def varima(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    d: int = 0,
+    q: int = 24,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import VARIMA
+    model = VARIMA(p=input_chunk_length, d=d, q=q, random_state=random_state)
+    return model

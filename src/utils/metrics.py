@@ -1,6 +1,10 @@
+from typing import Callable, Optional, Sequence, Tuple, Union
+
 import torch
 from torchmetrics import MetricCollection, Metric
+from darts import TimeSeries
 from darts.metrics import mape, mse, mae, rmse, smape, ope, mase, r2_score
+from darts.metrics.metrics import multivariate_support, multi_ts_support, _get_values_or_raise, _get_values
 from typing import Any
 import numpy as np
 
@@ -30,6 +34,48 @@ import numpy as np
 #         return _mean_absolute_percentage_error_compute(self.sum_abs_per_error, self.total)
 
 
+@multi_ts_support
+@multivariate_support
+def corr(
+    actual_series: Union[TimeSeries, Sequence[TimeSeries]],
+    pred_series: Union[TimeSeries, Sequence[TimeSeries]],
+    intersect: bool = True,
+    *,
+    reduction: Callable[[np.ndarray], float] = np.mean,
+    inter_reduction: Callable[[np.ndarray], Union[float, np.ndarray]] = lambda x: x,
+    n_jobs: int = 1,
+    verbose: bool = False
+) -> Union[float, np.ndarray]:
+    
+    y1, y2 = _get_values_or_raise(
+        actual_series, pred_series, intersect, remove_nan_union=True
+    )
+    
+    u = ((y1 - y1.mean(0)) * (y2 - y2.mean(0))).sum(0)
+    d = np.sqrt(((y1 - y1.mean(0)) ** 2 * (y2 - y2.mean(0)) ** 2).sum(0))
+    return (u / d).mean(-1)
+
+
+@multi_ts_support
+@multivariate_support
+def rse(
+    actual_series: Union[TimeSeries, Sequence[TimeSeries]],
+    pred_series: Union[TimeSeries, Sequence[TimeSeries]],
+    intersect: bool = True,
+    *,
+    reduction: Callable[[np.ndarray], float] = np.mean,
+    inter_reduction: Callable[[np.ndarray], Union[float, np.ndarray]] = lambda x: x,
+    n_jobs: int = 1,
+    verbose: bool = False
+) -> Union[float, np.ndarray]:
+    
+    y1, y2 = _get_values_or_raise(
+        actual_series, pred_series, intersect, remove_nan_union=True
+    )
+    
+    return np.sqrt(np.sum((y1 - y2) ** 2)) / np.sqrt(np.sum((y1 - y1.mean()) ** 2))
+
+
 def calculate_metrics(true, pred, **kwargs):
     try:
         _mae =  mae(true, pred, **kwargs)
@@ -55,6 +101,16 @@ def calculate_metrics(true, pred, **kwargs):
         _smape = smape(true, pred, **kwargs)
     except:
         _smape = torch.tensor(np.nan)
+        
+    try: 
+        _corr = corr(true, pred, **kwargs)
+    except:
+        _corr = torch.tensor(np.nan)
+    
+    try:
+        _rse = rse(true, pred, **kwargs)
+    except:
+        _rse = torch.tensor(np.nan)
     
     # try:
     #     _ope = ope(true, pred, **kwargs)
@@ -76,6 +132,8 @@ def calculate_metrics(true, pred, **kwargs):
             'rmse': _rmse,
             'mape': _mape,
             'smape': _smape,
+            'corr': _corr,
+            'rse': _rse,
             # 'ope': _ope,
             # 'mase': _mase,
             'r2': _r2,
