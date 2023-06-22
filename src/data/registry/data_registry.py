@@ -169,6 +169,41 @@ _DATASETS = {
     
 }
 
+# @register_dataset
+# def ettm2(
+#     split_ratio: Tuple[float] = (0.6, 0.2, 0.2),
+#     use_scaler: bool = True,
+#     target_series_index: int = None,
+#     **kwargs
+#     ) -> DataSeries:
+    
+#     series = ETTm2Dataset().load().astype(np.float32)
+    
+#     if target_series_index is not None:
+#         assert target_series_index<=len(series.components), f"Target series index out of range, choose it from 0 to {len(series.components)}."
+#         component = series.components[target_series_index]
+#         series = series[component]
+#         print(f"Using component {component} as target series.")
+    
+#     Warning("split ratio for ETTm2 dataset is set manually to (0.6, 0.2, 0.2).")
+#     split_ratio = (0.6, 0.2, 0.2) # this is set manually
+    
+#     data_series = split_series(series, split_ratio)
+    
+#     if use_scaler:
+#         scaler = Scaler(scaler=preprocessing.StandardScaler())
+#         train_series_scaled = scaler.fit_transform(data_series.train_series)
+#         val_series_scaled = scaler.transform(data_series.val_series)
+#         test_series_scaled = scaler.transform(data_series.test_series)
+#         data_scaled_series = DataSeries(
+#             train_series=train_series_scaled,
+#             val_series=val_series_scaled,
+#             test_series=test_series_scaled,
+#             scaler=scaler
+#             )
+#         return data_scaled_series
+#     return data_series
+
 
 # @register_dataset
 # def new_dataset(
