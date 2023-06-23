@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=1-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti08
+#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti10
 #SBATCH -c 16 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -27,7 +27,7 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=Slurm_test_noise_0.0
+version=baseline
 experiment="exp_default"
 model_name="deeptime"
 seed=0
@@ -35,8 +35,8 @@ batch_size=256
 epochs=100
 lr=0.001
 dataset_name="etth2"
-noise_std=0.0
-target_series_index=6
+noise_std=0
+target_series_index=-1
 new_dir=True
 verbose=False
 multiple=7
@@ -60,6 +60,8 @@ done
 input_chunk_length=$((output_chunk_length * multiple))
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
 name="${group}_seed${seed}"
+
+group=null
 
 echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
