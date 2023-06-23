@@ -50,7 +50,7 @@ def corr(
     y1, y2 = _get_values_or_raise(
         actual_series, pred_series, intersect, remove_nan_union=True
     )
-    
+    # we don't need to specify axis any where because we are using multivariate_support (this is slightly different than what is comonly implemented by others)
     u = ((y1 - y1.mean(0)) * (y2 - y2.mean(0))).sum(0)
     d = np.sqrt(((y1 - y1.mean(0)) ** 2 * (y2 - y2.mean(0)) ** 2).sum(0))
     return (u / d).mean(-1)

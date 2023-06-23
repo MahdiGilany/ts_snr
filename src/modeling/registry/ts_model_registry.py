@@ -178,7 +178,7 @@ def naive_mean(
 
 
 @register_model
-def naive_arma(
+def naive_movingaverage(
     input_chunk_length: int = 24,
     output_chunk_length: int = 12,
     random_state: int = 0,
@@ -188,6 +188,22 @@ def naive_arma(
     from darts.models import NaiveMovingAverage
     model = NaiveMovingAverage(input_chunk_length=input_chunk_length)
     return model
+
+
+@register_model
+def naive_martingle(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+    ):
+    from darts.models import NaiveSeasonal, NaiveDrift, NaiveEnsembleModel, RegressionEnsembleModel
+    model_seasonality = NaiveSeasonal(
+        K=1,
+    )
+    
+    return model_seasonality
 
 
 @register_model
