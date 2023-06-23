@@ -140,20 +140,14 @@ def eval_model(
         ) # size = (len(test_series_backtest), output_chunk_length, outdim)
     
     ##################### OLD CODE #####################
-    # stride=configs.model.output_chunk_length # it can be 1 for more accurate results but it takes longer
-    # backtest_series = model.historical_forecasts( # it is not parallelized!!!!!!!!!!!!!!!!!!!!!
+    # list_backtest_series = model.historical_forecasts(
     #     train_val_test_series_trimmed,
     #     start=test_series_backtest.start_time(),
-    #     forecast_horizon=configs.model.output_chunk_length,
+    #     forecast_horizon=output_chunk_length,
     #     retrain=False,
     #     verbose=False,
-    #     # stride=stride,
-    #     # last_points_only=False if stride > 1 else True,
     #     last_points_only=False,
     #     )
-    # if isinstance(backtest_series, List):
-    #     assert stride == configs.model.output_chunk_length, "stride should be equal to output_chunk_length, otherwise not implemented yet"
-    #     backtest_series = concatenate(backtest_series)
     #####################################################
     
     # rollinig predictions
