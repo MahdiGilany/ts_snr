@@ -62,7 +62,9 @@ def historical_forecast(
     assert model.model is not None, "model.model not found, please load the model using model.load_from_checkpoint()\
         or model.load_weights_from_checkpoint() which initializes model.model"
     
-    pl_model = model.model 
+    pl_model = model.model
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    pl_model = pl_model.to(device) 
     pl_model.eval()
     preds = []
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
