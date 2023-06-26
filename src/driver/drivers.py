@@ -311,6 +311,15 @@ def eval_model(
                  ]
                 wandb.log({"Media": plt})
                 
+                plt.figure(figsize=(5, 3))
+                test_series[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
+                [
+                    series[str(i)].plot(label="pred_" + component)
+                    for j, series in enumerate(list_backtest_series)
+                    if j%output_chunk_length==0
+                 ]
+                wandb.log({"Media": plt})
+                
     return results, list_backtest_series
                 
     
