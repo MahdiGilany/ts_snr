@@ -60,7 +60,7 @@ def deeptime(
 
 
 @register_model
-def OMPdeeptime(
+def omp_deeptime(
     input_chunk_length: int = 24,
     output_chunk_length: int = 12,
     random_state: int = 0,

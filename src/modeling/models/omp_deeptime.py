@@ -165,7 +165,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
-        n_nonzero_coefs: int = 150,
+        n_nonzero_coefs: int = 15,
         omp_threshold: float = 1e-2,
         **kwargs,
         ):
