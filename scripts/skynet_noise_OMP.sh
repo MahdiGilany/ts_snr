@@ -4,7 +4,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --time=1-01:00:00
 #SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti10
-#SBATCH -c 16 
+#SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
 
@@ -31,7 +31,7 @@ version=Slurm_OMP_OT
 experiment="exp_default"
 model_name="OMPdeeptime"
 seed=0
-batch_size=32
+batch_size=256
 epochs=100
 lr=0.001
 dataset_name="etth2"
@@ -57,10 +57,10 @@ done
 # run experiment
 # python scripts/test.py
 
-for noise_std in 0 0.3 0.5 0.7 #0.9 1.1 1.3 1.5 2.0
+for seed in {0..4}
 do
 
-for seed in {0..4}
+for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.1 # 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
