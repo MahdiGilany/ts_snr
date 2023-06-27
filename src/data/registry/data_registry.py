@@ -44,10 +44,11 @@ def create_noisy_dataset(
     """Adds noise to a registered dataset.
     """
     # get series
-    data_series: DataSeries = create_dataset(dataset_name, use_scaler=False, **kwargs)
-    train_series = data_series.train_series
-    val_series = data_series.val_series
-    test_series = data_series.test_series
+    data_scaled_series: DataSeries = create_dataset(dataset_name, use_scaler=use_scaler, **kwargs)
+    train_series = data_scaled_series.train_series
+    val_series = data_scaled_series.val_series
+    test_series = data_scaled_series.test_series
+    scaler = data_scaled_series.scaler
     
     # generate noise
     train_series_noise = TimeSeries.from_times_and_values(
@@ -60,7 +61,7 @@ def create_noisy_dataset(
         test_series.time_index, np.random.randn(*test_series._xa.shape)
         )
     
-    noise_std = noise_std * np.std(train_series._xa, axis=0).values # std is relative to std of train series for each dim separately
+    # noise_std = noise_std * np.std(train_series._xa, axis=0).values # std is relative to std of train series for each dim separately
 
     # add noise
     train_series_noisy = train_series + (noise_mean + noise_std*train_series_noise._xa.values)
@@ -69,16 +70,11 @@ def create_noisy_dataset(
     
     # scale if needed
     if use_scaler:
-        scaler = Scaler(scaler=preprocessing.StandardScaler())
-        train_series_noisy_scaled = scaler.fit_transform(train_series_noisy)
-        val_series_noisy_scaled = scaler.transform(val_series_noisy)
-        test_series_noisy_scaled = scaler.transform(test_series_noisy)
-        test_series_scaled = scaler.transform(test_series)
         data_series_noisy_scaled = DataSeries(
-            train_series=train_series_noisy_scaled,
-            val_series=val_series_noisy_scaled,
-            test_series=test_series_scaled,
-            test_series_noisy=test_series_noisy_scaled,
+            train_series=train_series_noisy,
+            val_series=val_series_noisy,
+            test_series=test_series,
+            test_series_noisy=test_series_noisy,
             scaler=scaler
             )
         return data_series_noisy_scaled
