@@ -172,6 +172,10 @@ def innerp(x, y=None, out=None):
     return torch.matmul(x[..., None, :], y[..., :, None], out=out)[..., 0, 0]
 
 def cholesky_solve(ATA, ATy):
+    # reg_coeff = torch.as_tensor(-5, dtype=ATA.dtype, device=ATA.device)
+    # reg_coeff = F.softplus(reg_coeff)
+    # ATA.diagonal(dim1=-2, dim2=-1).add_(reg_coeff)
+
     if ATA.dtype == torch.half or ATy.dtype == torch.half:
         return ATy.to(torch.float).cholesky_solve(torch.linalg.cholesky(ATA.to(torch.float))).to(ATy.dtype)
     return ATy.cholesky_solve(torch.linalg.cholesky(ATA)).to(ATy.dtype)
@@ -181,7 +185,7 @@ def linear_solve(ATA: torch.Tensor, ATy: torch.Tensor, reg_coeff=-15):
         warnings.warn(f"not accurate if batch_size={ATA.shape[0]} > n_nonzero_coefs={ATA.shape[1]} is not hold.")
     # assert ATA.shape[0] > ATA.shape[1], f"not accurate if batch_size={ATA.shape[0]} > n_nonzero_coefs={ATA.shape[1]} is not hold."
     # standard
-    reg_coeff = torch.as_tensor(reg_coeff, dtype=ATA.dtype, device=ATA.device)
+    reg_coeff = reg_coeff.to(dtype=ATA.dtype, device=ATA.device)
     reg_coeff = F.softplus(reg_coeff)
     ATA.diagonal(dim1=-2, dim2=-1).add_(reg_coeff)
     return torch.linalg.solve(ATA, ATy)
@@ -197,13 +201,29 @@ class OrthogonalMatchingPursuitParallel(nn.Module):
         alg='naive', 
         ) -> None:
         super().__init__()
-        self.omp = lambda dict, y: self.run_omp(dict, y, n_nonzero_coefs, precompute, tol, normalize, fit_intercept, alg)
+        self.n_nonzero_coefs = n_nonzero_coefs
+        self.precompute = precompute
+        self.tol = tol
+        self.normalize = normalize
+        self.fit_intercept = fit_intercept
+        self.alg = alg
+        
+        self.reg_coeff = torch.tensor(-15.0)
     
     def fit(self, dict: Tensor, y: Tensor):
         dict = dict[0, ...] # (batch_sz, input_dim, n_atoms) -> (input_dim, n_atoms) since data over batch is repeated
         ones = torch.ones(dict.shape[0], 1, device=dict.device)
         X = torch.concat([dict, ones], dim=-1)
-        coef = self.omp(X, y[:, :, 0]) # y is squeezed to match the shape needed in omp
+        coef = self.run_omp(
+            X,
+            y[:, :, 0],
+            self.n_nonzero_coefs,
+            self.precompute,
+            self.tol,
+            self.normalize,
+            self.fit_intercept,
+            self.alg
+            ) # y is squeezed to match the shape needed in omp
         self.coef = coef.detach()
         return self.coef
     
@@ -244,7 +264,11 @@ class OrthogonalMatchingPursuitParallel(nn.Module):
             X /= normalize[None, :]
 
         if precompute is True or alg == 'v0':
-            precompute = X.T @ X
+            if precompute==False:
+                precompute = None
+            else:
+                precompute = X.T @ X
+
 
         # If n_nonzero_coefs is equal to M, one should just return lstsq
         if alg == 'naive':
@@ -365,7 +389,7 @@ class OrthogonalMatchingPursuitParallel(nn.Module):
                     ATA[:, k, :k + 1] = XTX[sets[:, k, None], sets[:, :k + 1]]
                 else:
                     # Update ATAs by adding the new column of inner products.
-                    torch.bmm(AT[:, :k + 1, :], updateA[:, :, None], out=ATA[:, k, :k + 1, None])
+                    ATA[:, k, :k + 1, None] = torch.bmm(AT[:, :k + 1, :], updateA[:, :, None])
 
             # SOLVE ATAx = ATy.
             if on_cpu:
@@ -374,7 +398,7 @@ class OrthogonalMatchingPursuitParallel(nn.Module):
             else:
                 ATA[:, :k, k] = ATA[:, k, :k]  # Copy lower triangle to upper triangle.
                 # solutions = cholesky_solve(ATA, ATy)
-                solutions = linear_solve(ATA, ATy)
+                solutions = linear_solve(ATA, ATy, self.reg_coeff)
 
             # FINALLY, GET NEW RESIDUAL r=y-Ax
             if on_cpu:
