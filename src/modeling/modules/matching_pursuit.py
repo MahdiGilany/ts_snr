@@ -427,15 +427,14 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         self.bias = bias
     
     def fit(self, dict: Tensor, y: Tensor):
-        dict = dict[0, ...]
         if self.bias:
             # bias added
-            ones = torch.ones(dict.shape[0], 1, device=dict.device)
+            ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
             dict = torch.concat([dict, ones], dim=-1)
             
         assert y.shape[-1] == 1, 'OMP only supports single output so far'
-        coef, _, _ = self.omp(dict, y[:, :, 0]) # only one dimension is supported so far
-        self.coef = coef.detach()
+        
+        self.coef, _, _ = self.omp(dict, y[:, :, 0]) # only one dimension is supported so far
         return self.coef
     
     def forward(self, dict: Tensor, coef: Tensor = None) -> Tensor:
@@ -449,10 +448,12 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
         return torch.bmm(dict, coef.unsqueeze(-1))
         
-    def omp(self, dict: Tensor, y: Tensor):
+    def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
 
+        dict = X[0, ...] # consider cloning the tensor
+        
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
         n_nonzero_coefs = self.n_nonzero_coefs
@@ -473,7 +474,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         for i in range(n_nonzero_coefs): 
             # Compute the score of each atoms
             projections = dict.T @ residuals[:, :, None] # (batch_sz, input_dim, 1)
-            max_score_indices[:, i] = projections.abs().sum(-1).argmax(-1) # Sum is just a squeeze, but would be relevant in SOMP.
+            max_score_indices[:, i] = projections.abs().sum(-1).argmax(-1).detach() # Sum is just a squeeze, but would be relevant in SOMP.
             
             # update sparse_W
             _sparse_W = sparse_W[:, :, :i + 1]
@@ -503,9 +504,20 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # finally get residuals r=y-Wx
             residuals[:, :, None] = y[:, :, None] - _sparse_W @ solutions
         
-        solutions = solutions.squeeze(-1)
-        W = y.new_zeros(batch_sz, n_atoms)
-        W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = solutions
+        selected_atoms = X[
+            torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
+            torch.arange(chunk_length, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, :, None],
+            max_score_indices[:, None, :]
+            ]
+        # selected_atoms_list = []
+        # for j in range(batch_sz):
+        #     selected_atoms_list.append(X[j, :, max_score_indices[j, :]])
+        # selected_atoms = torch.stack(selected_atoms_list, dim=0)
+        atomsTatoms = selected_atoms.permute(0, 2, 1) @ selected_atoms
+        atomsTy = selected_atoms.permute(0, 2, 1) @ y[:, :, None]
+        coefs = torch.linalg.solve(atomsTatoms, atomsTy)
+        W = torch.zeros(batch_sz, n_atoms, dtype=selected_atoms.dtype, device=selected_atoms.device)
+        W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze()
         return W, max_score_indices, solutions
     
     @property
