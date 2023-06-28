@@ -29,9 +29,9 @@ echo "STARTING"
 # defaults
 version=Slurm_test_OMP
 experiment="exp_default"
-model_name="OMPdeeptime"
+model_name="omp_deeptime"
 seed=0
-batch_size=32
+batch_size=256
 epochs=100
 lr=0.001
 dataset_name="etth2"
@@ -76,9 +76,8 @@ python main.py name=$name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
-            +model.n_nonzero_coefs=$n_nonzero_coefs\ 
-            data.dataset_name=$dataset_name\
-            data.noise_std=$noise_std\
+            +model.n_nonzero_coefs=$n_nonzero_coefs\
+            data.dataset_name=$dataset_name data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
             logger.wandb.group=$group\
             verbose=$verbose\

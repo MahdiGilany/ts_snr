@@ -21,3 +21,9 @@ sbatch /.../... .sh # to submit a job
 
 
 for i in {0..4}; do sbatch scripts/skynet_noise.sh experiment=nbeats noise_std=0 seed=$i new_dir=True; done
+
+
+find -maxdepth 1 | grep Slurm_OT | xargs rm -r
+
+
+du -h slurm_logs/* | sort -hr

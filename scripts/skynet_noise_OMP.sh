@@ -80,9 +80,8 @@ python main.py name=$name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
-            +model.n_nonzero_coefs=$n_nonzero_coefs\ 
-            data.dataset_name=$dataset_name\
-            data.noise_std=$noise_std\
+            +model.n_nonzero_coefs=$n_nonzero_coefs\
+            data.dataset_name=$dataset_name data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
             logger.wandb.group=$group\
             verbose=$verbose\
