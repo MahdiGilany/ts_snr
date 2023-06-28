@@ -3,8 +3,8 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=1-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti08
-#SBATCH -c 16 
+#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti10
+#SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
 
@@ -57,7 +57,7 @@ done
 # run experiment
 # python scripts/test.py
 
-for noise_std in 0 0.1 0.3 0.5 0.7 0.9 #1.1 1.3 1.5 2.0
+for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.0 2.5 3.0 3.5
 do
 
 for seed in {0..0}

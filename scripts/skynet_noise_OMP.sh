@@ -2,7 +2,7 @@
 
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
-#SBATCH --time=1-01:00:00
+#SBATCH --time=3-01:00:00
 #SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
@@ -29,7 +29,7 @@ echo "STARTING"
 # defaults
 version=Slurm_OMP_OT
 experiment="exp_default"
-model_name="OMPdeeptime"
+model_name="omp_deeptime"
 seed=0
 batch_size=256
 epochs=100
@@ -60,7 +60,7 @@ done
 for seed in {0..4}
 do
 
-for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.1 # 2.5 3.0 3.5
+for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.0 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
