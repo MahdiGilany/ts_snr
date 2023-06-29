@@ -524,3 +524,67 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
     def reg_coeff(self) -> Tensor:
         return F.softplus(self._lambda)
 
+
+class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
+    def __init__(self, *args, tau: float = 1.0, hard=True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.tau = tau
+        self.hard = hard
+        
+    def omp(self, X: Tensor, y: Tensor):
+        '''Orthogonal Matching pursuit algorithm
+        '''
+        dict = X[0, ...] # consider cloning the tensor
+        
+        chunk_length, n_atoms = dict.shape
+        batch_sz, chunk_length = y.shape
+        n_nonzero_coefs = self.n_nonzero_coefs
+        tau = self.tau
+        hard = self.hard
+        
+        # DTD = dict.T @ dict
+        
+        residuals = y.clone() # (batch_sz, chunk_length)
+        max_score_indices = y.new_zeros((batch_sz, n_nonzero_coefs, n_atoms), dtype=torch.long) # (batch_sz, n_nonzero_coefs)
+                
+        tolerance = True
+        # Control stop interation with norm thresh or sparsity
+        for i in range(n_nonzero_coefs): 
+            # Compute the score of each atoms
+            projections = dict.T @ residuals[:, :, None] # (batch_sz, n_atoms, 1)
+            
+            soft_score_indices = (projections/tau).squeeze(-1).softmax(-1) # (batch_sz, n_atoms)
+            if hard :
+                # copied and modified from https://pytorch.org/docs/stable/_modules/torch/nn/functional.html#gumbel_softmax
+                # Straight through.
+                index = soft_score_indices.max(-1, keepdim=True)[1]
+                hard_score_indices = torch.zeros_like(soft_score_indices).scatter_(-1, index, 1.0)
+                ret = hard_score_indices - soft_score_indices.detach() + soft_score_indices   
+                max_score_indices[:, i] = ret
+            else:
+                max_score_indices[:, i] = soft_score_indices
+
+            
+            # update selected_D
+            selected_D = X * max_score_indices[:, :, None] # (batch_sz, chunk_length, n_atoms)
+            ind_0 = torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
+            ind_1 = torch.arange(chunk_length, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, :, None],
+            selected_D = X[ind_0, ind_1, max_score_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
+            
+            # calculate selected_DTy
+            selected_DTy = selected_D.permute(0, 2, 1) @ residuals[:, :, None] # (batch_sz, i+1, 1)
+            
+            # calculate selected_DTD
+            selected_DTD = selected_D.permute(0, 2, 1) @ selected_D # (batch_sz, i+1, i+1)
+            
+            # find W = (selected_DTD)^-1 @ selected_DTy
+            # selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+            nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
+
+            # finally get residuals r=y-Wx
+            residuals[:, :, None] = y[:, :, None] - selected_D @ nonzero_W # (batch_sz, chunk_length, 1)
+
+        W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
+        W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = nonzero_W.squeeze()
+        return W, max_score_indices, nonzero_W
+    
