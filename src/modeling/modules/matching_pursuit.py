@@ -578,8 +578,6 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
             ind_2 = torch.arange(i+1)[None, None, :]
             selected_D = _selected_D[ind_0, ind_1, ind_2, detached_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
             
-            s_D = dict[torch.arange(chunk_length)[:, None], detached_indices[:, :i+1]] # (chunk_length, i+1)
-
             # calculate selected_DTy
             selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, i+1, 1)
 
