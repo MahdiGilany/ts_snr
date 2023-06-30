@@ -414,13 +414,13 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
     def __init__(
         self,
         n_nonzero_coefs: int,
-        tol: float = 0.01,
-        lambda_init: Optional[float] = -150.,
+        tol: float = 0.001,
+        lambda_init: Optional[float] = -15.,
         bias: bool = True,
         ):
         super().__init__()
         
-        self._lambda = torch.as_tensor(lambda_init, dtype=torch.float) # lambda is fixed and doesn't get updated during training
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True) # lambda is fixed and doesn't get updated during training
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.tol = tol
@@ -568,6 +568,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                 # max_score_indices[:, i] = ret
                 max_score_indices.append(ret[:, None, :])
             else:
+                raise NotImplementedError # because of speed up with first indexing then multiplication with max_score_indices
                 max_score_indices.append(soft_score_indices[:, None, :])
             
             # update selected_D torch.cat(max_score_indices, dim=1)
@@ -594,7 +595,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
             selected_DTD = selected_D.permute(0, 2, 1) @ selected_D # (batch_sz, i+1, i+1)
 
             # find W = (selected_DTD)^-1 @ selected_DTy
-            # selected_DTD.diagonal(dim1=-2, dim2=-1).add_(1.) # TODO: add multipath OMP
+            selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
             nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
             # finally get residuals r=y-Wx
