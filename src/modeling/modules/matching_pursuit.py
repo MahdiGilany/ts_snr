@@ -567,7 +567,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                 hard_score_indices = torch.zeros_like(soft_score_indices).scatter_(-1, index, 1.0)
                 ret = hard_score_indices - soft_score_indices.detach() + soft_score_indices   
                 # max_score_indices[:, i] = ret
-                max_score_indices.append(ret[:, None, :])
+                max_score_indices.append(ret[:, None, :]) # (batch_sz, i+1, n_atoms), it is list on dimension of i+1
             else:
                 raise NotImplementedError # because of speed up with first indexing then multiplication with max_score_indices
                 max_score_indices.append(soft_score_indices[:, None, :])
