@@ -62,7 +62,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         self.nr_params = nr_params
         self.use_datetime = use_datetime
         
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:     
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         x = x_in[0] # shape = (batch_size, lookback_len, input_dim=ts_components)
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, _ = x.shape
