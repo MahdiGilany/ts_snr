@@ -420,7 +420,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         ):
         super().__init__()
         
-        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True) # lambda is fixed and doesn't get updated during training
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=False) # lambda is fixed and doesn't get updated during training
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.tol = tol
@@ -515,6 +515,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         # selected_atoms = torch.stack(selected_atoms_list, dim=0)
         atomsTatoms = selected_atoms.permute(0, 2, 1) @ selected_atoms
         atomsTy = selected_atoms.permute(0, 2, 1) @ y[:, :, None]
+        atomsTatoms.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
         coefs = torch.linalg.solve(atomsTatoms, atomsTy)
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_atoms.dtype, device=selected_atoms.device)
         W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze()
@@ -526,7 +527,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
 
 class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
-    def __init__(self, *args, tau: float = 0.01, hard=True, **kwargs):
+    def __init__(self, *args, tau: float = 0.001, hard=True, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.hard = hard
