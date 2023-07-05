@@ -560,6 +560,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
 
             detached_indices[:, i] = projections.abs().squeeze(-1).argmax(-1).detach().cpu().numpy()
             soft_score_indices = (projections/tau).abs().squeeze(-1).softmax(-1) # (batch_sz, n_atoms)
+            
             if hard:
                 # copied and modified from https://pytorch.org/docs/stable/_modules/torch/nn/functional.html#gumbel_softmax
                 # Straight through.
@@ -568,39 +569,53 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                 ret = hard_score_indices - soft_score_indices.detach() + soft_score_indices   
                 # max_score_indices[:, i] = ret
                 max_score_indices.append(ret[:, None, :]) # (batch_sz, i+1, n_atoms), it is list on dimension of i+1
+                        
+                # update selected_D torch.cat(max_score_indices, dim=1)
+                ## first indexing then multiplication with max_score_indices
+                ind_0 = torch.arange(batch_sz)[:, None, None]
+                ind_1 = torch.arange(chunk_length)[None, :, None]
+                _selected_D = X[ind_0, ind_1, detached_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
+                ind_0 = torch.arange(batch_sz)[:, None]
+                ind_1 = torch.arange(i+1)[None, :]
+                _selected_max_score_indices = torch.cat(max_score_indices, dim=1)[ind_0, ind_1, detached_indices[:, :i+1]]
+                selected_D = _selected_D * _selected_max_score_indices[:, None, :] # (batch_sz, chunk_length, i+1)
+                ## first multiplication then indexing with max_score_indices 
+                # _selected_D = X[:, None, ...] * torch.cat(max_score_indices, dim=1)[:, :i+1, None, :] # max_score_indices[:, :i+1, None, :] # (batch_sz, i+1, chunk_length, n_atoms)
+                # _selected_D = _selected_D.permute(0, 2, 1, 3) # (batch_sz, chunk_length, i+1, n_atoms)
+                # ind_0 = torch.arange(batch_sz)[:, None, None]
+                # ind_1 = torch.arange(chunk_length)[None, :, None]
+                # ind_2 = torch.arange(i+1)[None, None, :]
+                # selected_D = _selected_D[ind_0, ind_1, ind_2, detached_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
+                
+                # calculate selected_DTy
+                selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, i+1, 1)
+
+                # calculate selected_DTD
+                selected_DTD = selected_D.permute(0, 2, 1) @ selected_D # (batch_sz, i+1, i+1)
+
+                # find W = (selected_DTD)^-1 @ selected_DTy
+                selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+                nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
+
+                # finally get residuals r=y-Wx
+                residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
+
             else:
-                raise NotImplementedError # because of speed up with first indexing then multiplication with max_score_indices
-                max_score_indices.append(soft_score_indices[:, None, :])
-            
-            # update selected_D torch.cat(max_score_indices, dim=1)
-            ## first indexing then multiplication with max_score_indices
-            ind_0 = torch.arange(batch_sz)[:, None, None]
-            ind_1 = torch.arange(chunk_length)[None, :, None]
-            _selected_D = X[ind_0, ind_1, detached_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
-            ind_0 = torch.arange(batch_sz)[:, None]
-            ind_1 = torch.arange(i+1)[None, :]
-            _selected_max_score_indices = torch.cat(max_score_indices, dim=1)[ind_0, ind_1, detached_indices[:, :i+1]]
-            selected_D = _selected_D * _selected_max_score_indices[:, None, :] # (batch_sz, chunk_length, i+1)
-            ## first multiplication then indexing with max_score_indices 
-            # _selected_D = X[:, None, ...] * torch.cat(max_score_indices, dim=1)[:, :i+1, None, :] # max_score_indices[:, :i+1, None, :] # (batch_sz, i+1, chunk_length, n_atoms)
-            # _selected_D = _selected_D.permute(0, 2, 1, 3) # (batch_sz, chunk_length, i+1, n_atoms)
-            # ind_0 = torch.arange(batch_sz)[:, None, None]
-            # ind_1 = torch.arange(chunk_length)[None, :, None]
-            # ind_2 = torch.arange(i+1)[None, None, :]
-            # selected_D = _selected_D[ind_0, ind_1, ind_2, detached_indices[:, None, :i+1]] # (batch_sz, chunk_length, i+1)
-            
-            # calculate selected_DTy
-            selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, i+1, 1)
+                # raise NotImplementedError # because of speed up with first indexing then multiplication with max_score_indices
+                selected_D = X * soft_score_indices[:, None, :] # (batch_sz, chunk_length, n_atoms)
+                
+                # calculate selected_DTy
+                selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, n_atoms, 1)
 
-            # calculate selected_DTD
-            selected_DTD = selected_D.permute(0, 2, 1) @ selected_D # (batch_sz, i+1, i+1)
+                # calculate selected_DTD
+                selected_DTD = selected_D.permute(0, 2, 1) @ selected_D # (batch_sz, n_atoms, n_atoms)
 
-            # find W = (selected_DTD)^-1 @ selected_DTy
-            selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
-            nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
+                # find W = (selected_DTD)^-1 @ selected_DTy
+                selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+                nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, n_atoms, 1)
 
-            # finally get residuals r=y-Wx
-            residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
+                # finally get residuals r=y-Wx
+                residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
 
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
         W[torch.arange(batch_sz)[:, None], detached_indices] = nonzero_W.squeeze()    
