@@ -551,13 +551,13 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
         residuals.requires_grad = True
         # max_score_indices = y.new_zeros((batch_sz, n_nonzero_coefs, n_atoms), dtype=X.dtype, device=X.device)
         max_score_indices = []
-        sum_soft_score_indices = torch.zeros_like((batch_sz, n_atoms), dtype=X.dtype, device=X.device)
+        sum_soft_score_indices = torch.zeros((batch_sz, n_atoms), dtype=X.dtype, device=X.device)
         detached_indices = np.zeros((batch_sz, n_nonzero_coefs), dtype=np.int64) # (batch_sz, n_nonzero_coefs)
 
 
         tolerance = True
         # Control stop interation with norm thresh or sparsity
-        for i in range(n_nonzero_coefs): 
+        for i in range(n_nonzero_coefs):
             # Compute the score of each atoms
             projections = dict.T @ residuals[:, :, None] # (batch_sz, n_atoms, 1)
 
