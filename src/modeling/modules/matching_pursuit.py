@@ -527,7 +527,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
 
 class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
-    def __init__(self, *args, tau: float = 0.001, hard=True, hard_mode=1, **kwargs):
+    def __init__(self, *args, tau: float = 0.001, hard=True, hard_mode=0, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.hard = hard
@@ -605,7 +605,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                     residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
                 else:
                     sum_collector = sum_collector + ret
-                    selected_D = X * sum_collector[:, None, :]/(i+1) # (batch_sz, chunk_length, n_atoms)
+                    selected_D = X * sum_collector[:, None, :] # (batch_sz, chunk_length, n_atoms)
                     
                     # calculate selected_DTy
                     selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, n_atoms, 1)
@@ -624,7 +624,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
             else:
                 # raise NotImplementedError
                 sum_collector = sum_collector + soft_score_indices
-                selected_D = X * sum_collector[:, None, :]/(i+1) # (batch_sz, chunk_length, n_atoms)
+                selected_D = X * sum_collector[:, None, :] # (batch_sz, chunk_length, n_atoms)
                 
                 # calculate selected_DTy
                 selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, n_atoms, 1)
