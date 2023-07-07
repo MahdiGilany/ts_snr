@@ -115,8 +115,9 @@ class DataSeries:
 
 def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
     
+    default_split = (0.6, 0.2, 0.2) if "ETT" in DatasetClass else (0.7, 0.1, 0.2)
     def datasets_from_DatasetLoaderCSV(
-        split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
+        split_ratio: Tuple[float] = default_split,
         use_scaler: bool = True,
         target_series_index: int = None,
         **kwargs
