@@ -602,7 +602,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                     nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
                     # finally get residuals r=y-Wx
-                    residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
+                    residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
                 else:
                     sum_collector = sum_collector + ret
                     selected_D = X * sum_collector[:, None, :] # (batch_sz, chunk_length, n_atoms)
@@ -618,7 +618,7 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                     nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, n_atoms, 1)
 
                     # finally get residuals r=y-Wx
-                    residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
+                    residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
                     
                     
             else:
@@ -637,18 +637,18 @@ class DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVer
                 nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, n_atoms, 1)
 
                 # finally get residuals r=y-Wx
-                residuals = y - (selected_D @ nonzero_W).squeeze() # (batch_sz, chunk_length, 1)
+                residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
         
         if hard:
             if hard_mode == 0:
                 W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
-                W[torch.arange(batch_sz)[:, None], detached_indices] = nonzero_W.squeeze()
+                W[torch.arange(batch_sz)[:, None], detached_indices] = nonzero_W.squeeze(-1)
                 return W, max_score_indices, nonzero_W
             else:
-                W = nonzero_W.squeeze()
+                W = nonzero_W.squeeze(-1)
                 return W, sum_collector, nonzero_W
         else:
-            W = nonzero_W.squeeze()
+            W = nonzero_W.squeeze(-1)
             return W, sum_collector, nonzero_W
         
     
