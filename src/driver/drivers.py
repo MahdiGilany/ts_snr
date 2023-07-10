@@ -67,15 +67,19 @@ def historical_forecast(
     pl_model = pl_model.to(device) 
     pl_model.eval()
     preds = []
+    targets = []
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
     for batch in tqdm(test_dl, desc="Evaluating on test set"):
         input_series, _, _, target_series = batch
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
-        target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         pred = pl_model((input_series, _))
         preds.append(pred.detach().cpu())
+        targets.append(target_series.detach().cpu())
     preds = torch.cat(preds, dim=0)
     preds = preds.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
+    targets = torch.cat(targets, dim=0)
+    targets = targets.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
     
     # turn into TimeSeries
     list_backtest_series = []
@@ -86,7 +90,7 @@ def historical_forecast(
             freq=test_series.freq
             )
         list_backtest_series.append(backtest_series)
-    return list_backtest_series
+    return list_backtest_series, targets
     
     
 def eval_model(
@@ -134,12 +138,20 @@ def eval_model(
     train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest])
 
     log.info("Backtesting the model without retraining (testing on test series)")
-    list_backtest_series = historical_forecast(
+    list_backtest_series, test_targets = historical_forecast(
         model=model,
         test_series=train_val_test_series_trimmed,
         input_chunk_length=input_chunk_length,
         output_chunk_length=output_chunk_length,
         ) # size = (len(test_series_backtest), output_chunk_length, outdim)
+    
+    # # double check that the backtest target is the same as the test series and mse is the same
+    # list_backtest_values = [series.values() for series in list_backtest_series]
+    # backtest_array = np.stack(list_backtest_values, axis=0)
+    # targettest_array = test_targets.numpy()
+    # test_array = test_series.values()
+    # test_mse = ((backtest_array-targettest_array)**2).mean(1)
+    # print(f"Test MSE: {test_mse.mean()}")
     
     ##################### OLD CODE #####################
     # list_backtest_series = model.historical_forecasts(
