@@ -726,7 +726,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
         # Control stop interation with norm thresh or sparsity
         for i in range(n_nonzero_coefs):
             # Compute the score of each atoms
-            projections = dict.T @ residuals[:, :, None] # (batch_sz, n_atoms, 1)
+            projections = (dict.T)[None, ...] @ residuals[:, :, None] # (batch_sz, n_atoms, 1)
             soft_score_indices = (projections/tau).abs().squeeze(-1).softmax(-1) # (batch_sz, n_atoms)
             detached_indices[:, i] = projections.abs().squeeze(-1).argmax(-1).detach().cpu().numpy() # (batch_sz, ) for final W
 
@@ -740,7 +740,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 max_score_indices.append(ret[:, :, None]) # list[(batch_sz, n_atoms)] * i+1
                 
                 # update selected_D
-                selected_D = X @ torch.cat(max_score_indices, dim=2) # (batch_sz, chunk_length, i+1)
+                selected_D = dict[None, ...] @ torch.cat(max_score_indices, dim=2) # (batch_sz, chunk_length, i+1)
                 
                 # calculate selected_DTy
                 selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, i+1, 1)
@@ -759,7 +759,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 max_score_indices.append(soft_score_indices[:, :, None]) # list[(batch_sz, n_atoms)] * i+1
                 
                 # update selected_D
-                selected_D = X @ torch.cat(max_score_indices, dim=2) # (batch_sz, chunk_length, i+1)
+                selected_D = dict[None, ...] @ torch.cat(max_score_indices, dim=2) # (batch_sz, chunk_length, i+1)
                 
                 # calculate selected_DTy
                 selected_DTy = selected_D.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, i+1, 1)
