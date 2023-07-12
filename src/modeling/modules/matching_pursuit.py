@@ -527,7 +527,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
 
 class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
-    def __init__(self, *args, tau: float = 1e-30, hard=True, hard_mode=1, **kwargs):
+    def __init__(self, *args, tau: float = 1e-30, hard=True, hard_mode=0, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.hard = hard
