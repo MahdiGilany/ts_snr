@@ -602,7 +602,7 @@ class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVe
                     nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
                     # finally get residuals r=y-Wx
-                    residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
+                    residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
                 else:
                     sum_collector = sum_collector + ret
                     selected_D = X * sum_collector[:, None, :] # (batch_sz, chunk_length, n_atoms)
@@ -618,7 +618,7 @@ class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVe
                     nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, n_atoms, 1)
 
                     # finally get residuals r=y-Wx
-                    residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
+                    residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
                     
                     
             else:
@@ -637,7 +637,7 @@ class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVe
                 nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, n_atoms, 1)
 
                 # finally get residuals r=y-Wx
-                residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
+                residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)
         
         if hard:
             if hard_mode == 0:
@@ -753,7 +753,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
                 # finally get residuals r=y-Wx
-                residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)                    
+                residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)                    
                     
             else:
                 max_score_indices.append(soft_score_indices[:, :, None]) # list[(batch_sz, n_atoms)] * i+1
@@ -772,7 +772,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
                 # finally get residuals r=y-Wx
-                residuals = y - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)        
+                residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)        
         
 
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
