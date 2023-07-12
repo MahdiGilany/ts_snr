@@ -415,7 +415,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         self,
         n_nonzero_coefs: int,
         tol: float = 0.001,
-        lambda_init: Optional[float] = -15.,
+        lambda_init: Optional[float] = -30.,
         bias: bool = True,
         ):
         super().__init__()
@@ -527,7 +527,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
 
 class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
-    def __init__(self, *args, tau: float = 0.001, hard=True, hard_mode=0, **kwargs):
+    def __init__(self, *args, tau: float = 1e-30, hard=True, hard_mode=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.hard = hard
@@ -657,16 +657,16 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
     def __init__(
         self,
         n_nonzero_coefs: int,
-        tau: float = 0.001,
+        tau: float = 1e-30,
         bias: bool = True,
-        lambda_init = -15,
+        lambda_init = -30,
         tol: float = 0.001,
-        hard: bool =False,
+        hard: bool =True,
         **kwargs
         ):
         super().__init__()
 
-        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True) # lambda is fixed and doesn't get updated during training
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=False) # lambda is fixed and doesn't get updated during training
         
         self.n_nonzero_coefs = n_nonzero_coefs
         self.tau = tau
