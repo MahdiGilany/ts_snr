@@ -13,7 +13,7 @@ import math
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
-from ..modules.regressors import RidgeRegressor
+from ..modules.regressors import RidgeRegressor, RidgeRegressorTrimmed
 
 from darts.logging import get_logger, raise_if_not, raise_log
 from darts.models.forecasting.pl_forecasting_module import PLForecastingModule, PLPastCovariatesModule
@@ -42,6 +42,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.adaptive_weights = RidgeRegressor()
+        # self.adaptive_weights = RidgeRegressorTrimmed(no_remained_after_trim=3)
 
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
