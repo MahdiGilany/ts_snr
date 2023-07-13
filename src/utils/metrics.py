@@ -76,16 +76,19 @@ def rse(
     return np.sqrt(np.sum((y1 - y2) ** 2)) / np.sqrt(np.sum((y1 - y1.mean()) ** 2))
 
 
-def calculate_metrics(true, pred, **kwargs):
-    try:
-        _mae =  mae(true, pred, **kwargs)
-    except:
-        _mae = torch.tensor(np.nan)
-    
+def calculate_metrics(true, pred, only_mse=False, **kwargs):
     try:
         _mse = mse(true, pred, **kwargs)
     except:
         _mse = torch.tensor(np.nan)
+        
+    if only_mse:
+        return {'mse': _mse}
+        
+    try:
+        _mae =  mae(true, pred, **kwargs)
+    except:
+        _mae = torch.tensor(np.nan)
     
     try:
         _rmse = rmse(true, pred, **kwargs)
