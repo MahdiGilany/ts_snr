@@ -43,7 +43,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
         n_nonzero_coefs: int = 150,
-        omp_threshold: float = 1e-2,
+        omp_tolerance: float = 1e-2,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -51,9 +51,9 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
                        n_fourier_feats=n_fourier_feats, scales=scales)
         # self.OMP = _OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, stop=layer_size, r_thresh=omp_threshold)
         # self.OMP = OrthogonalMatchingPursuitParallel(n_nonzero_coefs=n_nonzero_coefs)
-        # self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs)
+        self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
         # self.OMP = _DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
-        self.OMP = DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
+        # self.OMP = DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
 
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
@@ -176,7 +176,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         n_nonzero_coefs: int = 15,
-        omp_threshold: float = 1e-2,
+        omp_tolerance: float = 1e-2,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -191,7 +191,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
         self.n_nonzero_coefs = n_nonzero_coefs
-        self.omp_threshold = omp_threshold
+        self.omp_tolerance = omp_tolerance
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -221,6 +221,6 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
             nr_params=nr_params,
             use_datetime=use_datetime,
             n_nonzero_coefs=self.n_nonzero_coefs,
-            omp_threshold=self.omp_threshold,
+            omp_tolerance=self.omp_tolerance,
             **self.pl_module_params,
             )
