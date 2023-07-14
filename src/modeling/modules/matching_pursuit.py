@@ -469,9 +469,13 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         selected_DTD = torch.eye(n_nonzero_coefs, dtype=dict.dtype, device=dict.device)[None].repeat(batch_sz, 1, 1)
         # selected_DTD = torch.zeros(batch_sz, n_nonzero_coefs, n_nonzero_coefs).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, n_nonzero_coefs)
         
+        # tolerance related 
+        norm_y = y.detach().clone().norm(dim=(1)).mean()
         tolerance = True
+        i = 0
         # Control stop interation with norm thresh or sparsity
-        for i in range(n_nonzero_coefs): 
+        while tolerance and i<self.n_nonzero_coefs: 
+        # for i in range(n_nonzero_coefs): 
             # Compute the score of each atoms
             projections = dict.T @ residuals[:, :, None] # (batch_sz, input_dim, 1)
             max_score_indices[:, i] = projections.abs().sum(-1).argmax(-1).detach() # Sum is just a squeeze, but would be relevant in SOMP.
@@ -503,6 +507,13 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
             # finally get residuals r=y-Wx
             residuals[:, :, None] = y[:, :, None] - _selected_D @ solutions
+            
+            # find tolerance and stopping criteria
+            i += 1
+            norm_res = residuals.norm(dim=(1)).mean()
+            tolerance = (norm_res > self.tol*norm_y).any()
+            if tolerance is False:
+                print('tolerance met')
         
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
