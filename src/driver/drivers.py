@@ -116,7 +116,16 @@ def eval_model(
     """
     
     #load model    
-    model.load_from_checkpoint(model_name=configs.model.model_name) # TODO: needs work if not using wandb or not after training
+    # manual loading
+    # from darts.models.forecasting.torch_forecasting_model import _get_checkpoint_fname, _get_checkpoint_folder
+    # model_name = configs.model.model_name
+    # work_dir = os.path.join(os.getcwd(), DEFAULT_DARTS_FOLDER)
+    # file_name = _get_checkpoint_fname(work_dir, model_name, best=True)
+    # checkpoint_dir = _get_checkpoint_folder(work_dir, model_name)
+    # file_path = os.path.join(checkpoint_dir, file_name)
+    # pl_model = model.model.load_from_checkpoint(file_path)
+    # model.model = model.model.load_from_checkpoint('/home/mahdigilany/offline_codes/codes/ts_snr/logs/experiments/runs/deeptime_test_model_load/2023-07-14_15-24-04/darts_logs/deeptime/checkpoints/best-epoch=20-val_loss=0.08.ckpt')
+    model = model.load_from_checkpoint(model_name=configs.model.model_name, best=True) # TODO: needs work if not using wandb or not after training
     
     # input and output chunk length
     input_chunk_length = configs.model.input_chunk_length
