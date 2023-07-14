@@ -464,10 +464,10 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         max_score_indices = y.new_zeros((batch_sz, n_nonzero_coefs), dtype=torch.long) # (batch_sz, n_nonzero_coefs)
         
         # sparse weight matrix        
-        sparse_W = torch.zeros(batch_sz, chunk_length, n_nonzero_coefs).to(device=dict.device, dtype=dict.dtype) # (batch_sz, chunk_length, n_nonzero_coefs)
-        sparse_WTy = torch.zeros(batch_sz, n_nonzero_coefs, 1).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, 1)
-        sparse_WTW = torch.eye(n_nonzero_coefs, dtype=dict.dtype, device=dict.device)[None].repeat(batch_sz, 1, 1)
-        # sparse_WTW = torch.zeros(batch_sz, n_nonzero_coefs, n_nonzero_coefs).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, n_nonzero_coefs)
+        selected_D = torch.zeros(batch_sz, chunk_length, n_nonzero_coefs).to(device=dict.device, dtype=dict.dtype) # (batch_sz, chunk_length, n_nonzero_coefs)
+        selected_DTy = torch.zeros(batch_sz, n_nonzero_coefs, 1).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, 1)
+        selected_DTD = torch.eye(n_nonzero_coefs, dtype=dict.dtype, device=dict.device)[None].repeat(batch_sz, 1, 1)
+        # selected_DTD = torch.zeros(batch_sz, n_nonzero_coefs, n_nonzero_coefs).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, n_nonzero_coefs)
         
         tolerance = True
         # Control stop interation with norm thresh or sparsity
@@ -476,33 +476,33 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             projections = dict.T @ residuals[:, :, None] # (batch_sz, input_dim, 1)
             max_score_indices[:, i] = projections.abs().sum(-1).argmax(-1).detach() # Sum is just a squeeze, but would be relevant in SOMP.
             
-            # update sparse_W
-            _sparse_W = sparse_W[:, :, :i + 1]
+            # update selected_D
+            _selected_D = selected_D[:, :, :i + 1]
             curr_atoms = dict[:, max_score_indices[:, i]] # select the atom with the max score (chunk_length, batch_sz)
-            _sparse_W[:, :, i] = curr_atoms.T # an atom is added to sparse W per each datum in the batch at each iteration
+            _selected_D[:, :, i] = curr_atoms.T # an atom is added to sparse W per each datum in the batch at each iteration
 
-            # update sparse_WTy based on the current atom
-            _sparse_WTy = sparse_WTy[:, :i + 1]
-            _sparse_WTy[:, i, 0] = torch.bmm(_sparse_W[:, :, i:i+1].permute(0, 2, 1), y[:, :, None]).squeeze() # (batch_sz, 1, chunk_length) * (batch_sz, chunk_length, 1) -> (batch_sz, 1, 1) 
+            # update selected_DTy based on the current atom
+            _selected_DTy = selected_DTy[:, :i + 1]
+            _selected_DTy[:, i, 0] = torch.bmm(_selected_D[:, :, i:i+1].permute(0, 2, 1), y[:, :, None]).squeeze() # (batch_sz, 1, chunk_length) * (batch_sz, chunk_length, 1) -> (batch_sz, 1, 1) 
 
             
-            # update sparse_WTW based on sparse_WT or precomputed XTX.
-            _sparse_WTW = sparse_WTW[:, :i + 1, :i + 1]
+            # update selected_DTD based on selected_DT or precomputed XTX.
+            _selected_DTD = selected_DTD[:, :i + 1, :i + 1]
             
-            # Update sparse_WTW by adding the new column of inner products.
-            _sparse_WTW[:, :, :] = torch.bmm(_sparse_W[:, :, :i+1].permute(0, 2, 1), _sparse_W[:, :, :i+1])
-            # _sparse_WTW[:, i, :i + 1] = DTD[max_score_indices[:, i, None], max_score_indices[:, :i + 1]]
-            # _sparse_WTW[:, i, :i + 1, None] = torch.bmm(_sparse_W[:, :, :i+1].permute(0, 2, 1), curr_atoms.T[:, :, None])
-            # _sparse_WTW[:, :i, i] = _sparse_WTW[:, i, :i] # Copy lower triangle to upper triangle.
+            # Update selected_DTD by adding the new column of inner products.
+            _selected_DTD[:, :, :] = torch.bmm(_selected_D[:, :, :i+1].permute(0, 2, 1), _selected_D[:, :, :i+1])
+            # _selected_DTD[:, i, :i + 1] = DTD[max_score_indices[:, i, None], max_score_indices[:, :i + 1]]
+            # _selected_DTD[:, i, :i + 1, None] = torch.bmm(_selected_D[:, :, :i+1].permute(0, 2, 1), curr_atoms.T[:, :, None])
+            # _selected_DTD[:, :i, i] = _selected_DTD[:, i, :i] # Copy lower triangle to upper triangle.
             
-            # solve sparse_W @ solutions = y
-            # solutions = cholesky_solve(_sparse_WTW, _sparse_WTy)
+            # solve selected_D @ solutions = y
+            # solutions = cholesky_solve(_selected_DTD, _selected_DTy)
             # linear solve
-            # _sparse_WTW.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
-            solutions = torch.linalg.solve(_sparse_WTW, _sparse_WTy) # (batch_sz, n_nonzero_coefs, 1)
+            # _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+            solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, n_nonzero_coefs, 1)
 
             # finally get residuals r=y-Wx
-            residuals[:, :, None] = y[:, :, None] - _sparse_W @ solutions
+            residuals[:, :, None] = y[:, :, None] - _selected_D @ solutions
         
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
