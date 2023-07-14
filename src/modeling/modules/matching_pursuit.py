@@ -452,7 +452,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         '''Orthogonal Matching pursuit algorithm
         '''
 
-        dict = X[0, ...] # consider cloning the tensor
+        dict = X[0, ...].detach() # consider cloning the tensor
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
@@ -460,7 +460,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         
         # DTD = dict.T @ dict
         
-        residuals = y.clone() # (batch_sz, chunk_length)
+        residuals = y.detach().clone() # (batch_sz, chunk_length)
         max_score_indices = y.new_zeros((batch_sz, n_nonzero_coefs), dtype=torch.long) # (batch_sz, n_nonzero_coefs)
         
         # sparse weight matrix        
@@ -506,7 +506,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, n_nonzero_coefs, 1)
 
             # finally get residuals r=y-Wx
-            residuals[:, :, None] = y[:, :, None] - _selected_D @ solutions
+            residuals[:, :, None] = y[:, :, None].detach() - _selected_D @ solutions
             
             # find tolerance and stopping criteria
             i += 1
@@ -668,7 +668,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
     def __init__(
         self,
         n_nonzero_coefs: int,
-        tau: float = 1e-30,
+        tau: float = 1e-3,
         bias: bool = True,
         lambda_init = -30,
         tol: float = 0.001,
