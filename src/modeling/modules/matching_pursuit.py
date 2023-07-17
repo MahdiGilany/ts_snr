@@ -511,8 +511,8 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # find tolerance and stopping criteria
             i += 1
             norm_res = residuals.norm(dim=(1)).mean()
-            tolerance = (norm_res > self.tol*norm_y).any()
-            if tolerance is False:
+            tolerance = (norm_res > self.tol*norm_y)
+            if tolerance==False:
                 print('tolerance met')
         
         selected_atoms = X[

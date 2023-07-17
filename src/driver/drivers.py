@@ -144,8 +144,8 @@ def eval_model(
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
     num_trimmed_train_val = max(len(test_series_backtest),input_chunk_length)
     train_val_series_trimmed = concatenate([train_series, val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
-    # train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest])
-    train_val_test_series_trimmed = test_series_backtest
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest]) # use a lookback of val for testing
+    # train_val_test_series_trimmed = test_series_backtest
 
     log.info("Backtesting the model without retraining (testing on test series)")
     list_backtest_series, test_targets = historical_forecast(

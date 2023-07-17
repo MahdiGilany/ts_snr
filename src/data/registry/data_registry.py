@@ -92,8 +92,9 @@ def split_series(
     series: TimeSeries,
     split_ratio: Tuple[float] = (0.7, 0.1, 0.2)
     ):
-    assert sum(split_ratio) == 1, "Split ratio must sum to 1"
-    train_series, test_series = series.split_before(sum(split_ratio[0:2]))
+    # assert sum(split_ratio) == 1, "Split ratio must sum to 1"
+    total_series, _ = series.split_before(sum(split_ratio)) # in case split ratio is not sum to 1 (for ETT in literature)
+    train_series, test_series = total_series.split_before(sum(split_ratio[0:2]))
     train_series, val_series = train_series.split_before(split_ratio[0]/sum(split_ratio[0:2]))
     data_series = DataSeries(
         train_series=train_series,
@@ -115,7 +116,8 @@ class DataSeries:
 
 def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
     
-    default_split = (0.6, 0.2, 0.2) if "ETT" in DatasetClass.__name__ else (0.7, 0.1, 0.2)
+    total_ratio_ett = 0.826663
+    default_split = (0.6*total_ratio_ett, 0.2*total_ratio_ett, 0.2*total_ratio_ett) if "ETT" in DatasetClass.__name__ else (0.7, 0.1, 0.2)
     def datasets_from_DatasetLoaderCSV(
         split_ratio: Tuple[float] = default_split,
         use_scaler: bool = True,
