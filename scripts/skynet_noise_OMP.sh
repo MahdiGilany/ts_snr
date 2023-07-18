@@ -37,6 +37,7 @@ lr=0.001
 dataset_name="etth2"
 noise_std=0
 target_series_index=-1
+tolerance=1e-3
 n_nonzero_coefs=15
 new_dir=True
 verbose=False
@@ -66,7 +67,7 @@ do
 # set name, group, and input chunk length
 input_chunk_length=$((output_chunk_length * multiple))
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_nonzero${n_nonzero_coefs}_noise_std${noise_std}_v${version}"
-name="${group}_seed${seed}"
+name="${group}_seed${seed}_tol${tolerance}"
 
 echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
 # + is needed in +model.n_nonzero, since experiment is exp_default
@@ -81,6 +82,7 @@ python main.py name=$name\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
             +model.n_nonzero_coefs=$n_nonzero_coefs\
+            +model.omp_tolerance=$tolerance\
             data.dataset_name=$dataset_name data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
             logger.wandb.group=$group\
