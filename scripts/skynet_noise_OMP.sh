@@ -27,7 +27,7 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=Slurm_OMP_OT
+version=omp_secondv
 experiment="exp_default"
 model_name="omp_deeptime"
 seed=0

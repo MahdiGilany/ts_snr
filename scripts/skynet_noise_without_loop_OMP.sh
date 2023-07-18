@@ -27,7 +27,7 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=diff_omp
+version=omp_secondv
 experiment="exp_default"
 model_name="omp_deeptime"
 seed=0
@@ -39,6 +39,7 @@ dataset_name="etth2"
 noise_std=0.0
 target_series_index=-1
 layer_size=256
+tolerance=1e-3
 n_nonzero_coefs=15
 new_dir=True
 verbose=False
@@ -62,7 +63,7 @@ done
 # set name, group, and input chunk length
 input_chunk_length=$((output_chunk_length * multiple))
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_nonzero${n_nonzero_coefs}_noise_std${noise_std}_v${version}"
-name="${group}_seed${seed}"
+name="${group}_seed${seed}_tol${tolerance}"
 
 group=null
 
@@ -78,7 +79,7 @@ python main.py name=$name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr +model.layer_size=$layer_size\
-            +model.n_nonzero_coefs=$n_nonzero_coefs\
+            +model.n_nonzero_coefs=$n_nonzero_coefs +model.omp_tolerance=$tolerance\
             data.dataset_name=$dataset_name data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
             callbacks.early_stopping.patience=$patience\
