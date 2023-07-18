@@ -59,7 +59,7 @@ done
 for seed in {0..4}
 do
 
-for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.0 2.5 3.0 3.5
+for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
