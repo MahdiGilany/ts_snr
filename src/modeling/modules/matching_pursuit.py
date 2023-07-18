@@ -415,12 +415,12 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         self,
         n_nonzero_coefs: int,
         tol: float = 0.001,
-        lambda_init: Optional[float] = -0.,
+        lambda_init: Optional[float] = -5.,
         bias: bool = True,
         ):
         super().__init__()
         
-        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True) # lambda is fixed and doesn't get updated during training
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=False) # lambda is fixed and doesn't get updated during training
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.tol = tol
