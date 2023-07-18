@@ -90,11 +90,11 @@ def create_noisy_dataset(
 
 def split_series(
     series: TimeSeries,
-    split_ratio: Tuple[float] = (0.7, 0.1, 0.2)
+    split_ratio: Tuple[float] = (0.7, 0.1, 0.2),
     ):
     # assert sum(split_ratio) == 1, "Split ratio must sum to 1"
     total_series, _ = series.split_before(sum(split_ratio)) # in case split ratio is not sum to 1 (for ETT in literature)
-    train_series, test_series = total_series.split_before(sum(split_ratio[0:2]))
+    train_series, test_series = total_series.split_before(sum(split_ratio[0:2])/sum(split_ratio))
     train_series, val_series = train_series.split_before(split_ratio[0]/sum(split_ratio[0:2]))
     data_series = DataSeries(
         train_series=train_series,
