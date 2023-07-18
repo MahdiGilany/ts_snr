@@ -415,12 +415,12 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         self,
         n_nonzero_coefs: int,
         tol: float = 0.001,
-        lambda_init: Optional[float] = -30.,
+        lambda_init: Optional[float] = -0.,
         bias: bool = True,
         ):
         super().__init__()
         
-        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=False) # lambda is fixed and doesn't get updated during training
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True) # lambda is fixed and doesn't get updated during training
 
         self.n_nonzero_coefs = n_nonzero_coefs
         self.tol = tol
@@ -502,7 +502,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # solve selected_D @ solutions = y
             # solutions = cholesky_solve(_selected_DTD, _selected_DTy)
             # linear solve
-            # _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+            _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff.detach()) # TODO: add multipath OMP
             solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, n_nonzero_coefs, 1)
 
             # finally get residuals r=y-Wx
@@ -513,7 +513,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             norm_res = residuals.norm(dim=(1)).mean()
             tolerance = (norm_res > self.tol*norm_y)
             if tolerance==False:
-                print('tolerance met')
+                comment='tolerance met'
         
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
