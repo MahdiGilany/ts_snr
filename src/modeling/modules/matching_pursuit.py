@@ -446,13 +446,15 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
             dict = torch.concat([dict, ones], dim=-1)
 
+        # dict = dict/dict.norm(dim=1, keepdim=True)
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
-
-        dict = X[0, ...] # consider cloning the tensor
+        # X = X/X.norm(dim=1, keepdim=True)
+        dict = X[0, ...].detach().clone() # consider cloning the tensor
+        dict = dict/dict.norm(dim=0, keepdim=True)
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
