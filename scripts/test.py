@@ -33,9 +33,24 @@ import torch
 # a = torch.tensor([1, 2, 3, 4, 5], device=device)
 # print(a)
 
-import torch
-x = torch.tensor(2.0, requires_grad = True)
-print("x:", x)
-y = x**2
-y.backward()
-print(x.grad, y.is_leaf, x.is_leaf, x.grad.is_leaf)
+# import torch
+# x = torch.tensor(2.0, requires_grad = True)
+# print("x:", x)
+# y = x**2
+# y.backward()
+# print(x.grad, y.is_leaf, x.is_leaf, x.grad.is_leaf)
+
+import numpy as np
+
+x = np.arange(1000000)
+a = x.reshape(20, 50000)
+print(a)
+
+np.random.seed(0)
+_laplace = np.random.laplace(0, 1, a.shape)
+_normal = np.random.normal(0, 1, a.shape)
+print(_laplace)
+
+plt.hist(_laplace[0,:], bins=50)
+plt.hist(_normal[0,:], bins=50, alpha=0.5)
+plt.savefig("laplace.png")

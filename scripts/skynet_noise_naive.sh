@@ -57,7 +57,7 @@ done
 # run experiment
 # python scripts/test.py
 
-for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 2.0 2.5 3.0 3.5
+for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
 do
 
 for seed in {0..0}

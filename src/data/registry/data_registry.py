@@ -1,6 +1,6 @@
 
 import numpy as np
-from typing import Union, Tuple
+from typing import Union, Tuple, Literal
 from darts import TimeSeries
 from darts.dataprocessing.transformers import Scaler
 from dataclasses import dataclass
@@ -36,8 +36,9 @@ def create_dataset(dataset_name, **kwargs):
 
 def create_noisy_dataset(
     dataset_name,
-    noise_mean=0,
-    noise_std=1,
+    noise_type: Literal["gaussian", "laplace"] = "gaussian",
+    noise_mean: float = 0,
+    noise_std: float = 1,
     use_scaler: bool = True,
     **kwargs
     ):
@@ -50,23 +51,26 @@ def create_noisy_dataset(
     test_series = data_scaled_series.test_series
     scaler = data_scaled_series.scaler
     
+    random_function = np.random.normal if noise_type=="gaussian" else np.random.laplace
+    noise_scale = noise_std if noise_type=="gaussian" else noise_std/np.sqrt(2)
+    
     # generate noise
     train_series_noise = TimeSeries.from_times_and_values(
-        train_series.time_index, np.random.randn(*train_series._xa.shape) # TODO: not a good way to access values
+        train_series.time_index, random_function(loc=noise_mean, scale=noise_scale, size=train_series._xa.shape) # TODO: not a good way to access values
         )
     val_series_noise = TimeSeries.from_times_and_values(
-        val_series.time_index, np.random.randn(*val_series._xa.shape)
+        val_series.time_index, random_function(loc=noise_mean, scale=noise_scale, size=val_series._xa.shape)
         )
     test_series_noise = TimeSeries.from_times_and_values(
-        test_series.time_index, np.random.randn(*test_series._xa.shape)
+        test_series.time_index, random_function(loc=noise_mean, scale=noise_scale, size=test_series._xa.shape)
         )
     
     # noise_std = noise_std * np.std(train_series._xa, axis=0).values # std is relative to std of train series for each dim separately
 
     # add noise
-    train_series_noisy = train_series + (noise_mean + noise_std*train_series_noise._xa.values)
-    val_series_noisy = val_series + (noise_mean + noise_std*val_series_noise._xa.values)
-    test_series_noisy = test_series + (noise_mean + noise_std*test_series_noise._xa.values)
+    train_series_noisy = train_series + train_series_noise._xa.values
+    val_series_noisy = val_series + val_series_noise._xa.values
+    test_series_noisy = test_series + test_series_noise._xa.values
     
     # scale if needed
     if use_scaler:

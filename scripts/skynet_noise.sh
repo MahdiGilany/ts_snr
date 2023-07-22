@@ -35,6 +35,7 @@ batch_size=256
 epochs=100
 lr=0.001
 dataset_name="etth2"
+noise_type="gaussian"
 noise_std=0
 target_series_index=-1
 new_dir=True
@@ -64,7 +65,7 @@ do
 
 # set name, group, and input chunk length
 input_chunk_length=$((output_chunk_length * multiple))
-group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_std${noise_std}_v${version}"
+group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_${noise_type}_std${noise_std}_v${version}"
 name="${group}_seed${seed}"
 
 echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
@@ -79,6 +80,7 @@ python main.py name=$name\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
             data.dataset_name=$dataset_name\
+            data.noise_type=$noise_type\
             data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
             logger.wandb.group=$group\
