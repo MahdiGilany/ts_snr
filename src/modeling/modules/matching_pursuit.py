@@ -540,7 +540,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
 
 
 class _DifferentiableOrthogonalMatchingPursuit(OrthogonalMatchingPursuitSecondVersion):
-    def __init__(self, *args, tau: float = 1e-3, hard=True, hard_mode=0, **kwargs):
+    def __init__(self, *args, tau: float = 1e-3, hard=True, hard_mode=1, **kwargs):
         super().__init__(*args, **kwargs)
         self.tau = tau
         self.hard = hard
@@ -670,9 +670,9 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
     def __init__(
         self,
         n_nonzero_coefs: int,
-        tau: float = 1e-30,
+        tau: float = 1e-2,
         bias: bool = True,
-        lambda_init = -30,
+        lambda_init = -5,
         tol: float = 0.001,
         hard: bool =True,
         **kwargs
@@ -710,13 +710,14 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
             # adding bias term
             ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
             dict = torch.concat([dict, ones], dim=-1)
-
+        # dict = dict/dict.norm(dim=1, keepdim=True)
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
         dict = X[0, ...] # consider cloning the tensor
+        # dict = dict/dict.norm(dim=0, keepdim=True) # normalize the dictionary
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape

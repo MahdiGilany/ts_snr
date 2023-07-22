@@ -29,7 +29,7 @@ from darts.utils.torch import MonteCarloDropout
 logger = get_logger(__name__)
 
 
-class _OMPDeepTIMeModule(PLPastCovariatesModule):
+class _TwoOMPDeepTIMeModule(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
     def __init__(
@@ -53,8 +53,8 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
                        n_fourier_feats=n_fourier_feats, scales=scales)
         # self.OMP = _OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, stop=layer_size, r_thresh=omp_threshold)
         # self.OMP = OrthogonalMatchingPursuitParallel(n_nonzero_coefs=n_nonzero_coefs)
-        self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
-        # self.OMP = _DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
+        # self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
+        self.OMP = _DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
         # self.OMP = DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
 
         self.output_chunk_length = forecast_horizon_length
@@ -68,6 +68,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         
     def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         x = x_in[0] # shape = (batch_size, lookback_len, input_dim=ts_components)
+        y = self.y # shape = (batch_size, horizon_len, input_dim=ts_components)
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, _ = x.shape
         coords = self.get_coords(lookback_len, tgt_horizon_len).to(x.device)
@@ -84,14 +85,56 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, lookback_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
-        coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
-        preds = self.OMP.forward(horizon_reprs, coef)
+        self.coef_lookback = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        self.coef_horizon = self.OMP.fit(horizon_reprs, y) # w.shape = (batch_size, layer_size, output_dim)
+        preds = self.OMP.forward(horizon_reprs, self.coef_lookback)
         
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )
         return preds
+    
+    def training_step(self, train_batch, batch_idx) -> torch.Tensor:
+        """performs the training step"""
+        self.y = train_batch[-1]
+        output = self._produce_train_output(train_batch[:-1])
+        target = train_batch[
+            -1
+        ]  # By convention target is always the last element returned by datasets
+        loss = self._compute_loss(self.coef_horizon.unsqueeze(dim=-1), self.coef_lookback)
+        self.log(
+            "train_loss",
+            loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        pred_loss = self._compute_loss(output, target)
+        self.log(
+            "pred_loss",
+            pred_loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.train_metrics)
+        return loss
 
+    def validation_step(self, val_batch, batch_idx) -> torch.Tensor:
+        """performs the validation step"""
+        self.y = val_batch[-1]
+        output = self._produce_train_output(val_batch[:-1])
+        target = val_batch[-1]
+        loss = self._compute_loss(output, target)
+        self.log(
+            "val_loss",
+            loss,
+            batch_size=val_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.val_metrics)
+        return loss
 
     def get_coords(self, lookback_len: int, horizon_len: int) -> torch.Tensor:
         coords = torch.linspace(0, 1, lookback_len + horizon_len)
@@ -167,7 +210,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
             return optimizer
     
     
-class OMPDeepTIMeModel(PastCovariatesTorchModel):
+class TwoOMPDeepTIMeModel(PastCovariatesTorchModel):
     def __init__(
         self,
         input_chunk_length: int,
@@ -217,7 +260,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         nr_params = 1 if self.likelihood is None else self.likelihood.num_parameters
         use_datetime = True if self.datetime_feats != 0 else False
         
-        return _OMPDeepTIMeModule(
+        return _TwoOMPDeepTIMeModule(
             forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,

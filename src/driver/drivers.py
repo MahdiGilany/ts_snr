@@ -73,6 +73,8 @@ def historical_forecast(
         input_series, _, _, target_series = batch
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
         # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        pl_model.y = target_series.to(device=pl_model.device, dtype=pl_model.dtype) # a hack for setting target for twoomp model
+        
         pred = pl_model((input_series, _))
         preds.append(pred.detach().cpu())
         targets.append(target_series.detach().cpu())
