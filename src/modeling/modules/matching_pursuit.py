@@ -446,15 +446,15 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
             dict = torch.concat([dict, ones], dim=-1)
 
-        # dict = dict/dict.norm(dim=1, keepdim=True)
+        # dict = dict/(F.relu(dict.norm(dim=1, keepdim=True)-1) + 1.0)
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
-        # X = X/X.norm(dim=1, keepdim=True)
+        # X = X/(F.relu(X.norm(dim=1, keepdim=True)-1) + 1.0)
         dict = X[0, ...].detach().clone() # consider cloning the tensor
-        dict = dict/dict.norm(dim=0, keepdim=True)
+        # dict = dict/(F.relu(dict.norm(dim=0, keepdim=True)-1) + 1.0) # normalize the dictionary to have maximum unit norm
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
@@ -710,14 +710,15 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
             # adding bias term
             ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
             dict = torch.concat([dict, ones], dim=-1)
-        # dict = dict/dict.norm(dim=1, keepdim=True)
+        
+        # dict = dict/(F.relu(dict.norm(dim=1, keepdim=True)-1) + 1.0) # normalize the dictionary to have maximum unit norm
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
         dict = X[0, ...] # consider cloning the tensor
-        # dict = dict/dict.norm(dim=0, keepdim=True) # normalize the dictionary
+        # dict = dict/(F.relu(dict.norm(dim=0, keepdim=True)-1) + 1.0) # normalize the dictionary to have maximum unit norm
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
