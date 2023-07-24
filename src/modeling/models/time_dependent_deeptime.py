@@ -13,14 +13,7 @@ import math
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
-from ..modules.matching_pursuit import (
-    _OrthogonalMatchingPursuit,
-    OrthogonalMatchingPursuitParallel,
-    OrthogonalMatchingPursuitSecondVersion,
-    _DifferentiableOrthogonalMatchingPursuit,
-    DifferentiableOrthogonalMatchingPursuit,
-    DifferentiableMatchingPursuit,
-    )
+from ..modules.regressors import RidgeRegressor, RidgeRegressorTrimmed
 
 from darts.logging import get_logger, raise_if_not, raise_log
 from darts.models.forecasting.pl_forecasting_module import PLForecastingModule, PLPastCovariatesModule
@@ -30,7 +23,7 @@ from darts.utils.torch import MonteCarloDropout
 logger = get_logger(__name__)
 
 
-class _OMPDeepTIMeModule(PLPastCovariatesModule):
+class _TimeDependentDeepTIMeModule(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
     def __init__(
@@ -43,21 +36,14 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        n_nonzero_coefs: int = 150,
-        omp_tolerance: float = 1e-2,
-        tau: float = 1e-3,
-        hard: bool = True,
         **kwargs,
         ):
         super().__init__(**kwargs)
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        # self.OMP = _OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, stop=layer_size, r_thresh=omp_threshold)
-        # self.OMP = OrthogonalMatchingPursuitParallel(n_nonzero_coefs=n_nonzero_coefs)
-        # self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
-        # self.OMP = _DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
-        # self.OMP = DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
-        self.OMP = DifferentiableMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
+        self.adaptive_weights = RidgeRegressor()
+        self.adaptive_weights_t = RidgeRegressor()
+        # self.adaptive_weights = RidgeRegressorTrimmed(no_remained_after_trim=3)
 
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
@@ -65,11 +51,12 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        
         self.nr_params = nr_params
         self.use_datetime = use_datetime
         
     def forward(self, x_in: torch.Tensor) -> torch.Tensor:
-        x = x_in[0] # shape = (batch_size, lookback_len, input_dim=ts_components)
+        x = x_in[0]
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, _ = x.shape
         coords = self.get_coords(lookback_len, tgt_horizon_len).to(x.device)
@@ -84,16 +71,18 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         else:
             time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
-        lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, lookback_length, layer_size)
+        lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
-        coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
-        preds = self.OMP.forward(horizon_reprs, coef)
+        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        preds = self.forecast(horizon_reprs, w, b)
         
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )
         return preds
 
+    def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
 
     def get_coords(self, lookback_len: int, horizon_len: int) -> torch.Tensor:
         coords = torch.linspace(0, 1, lookback_len + horizon_len)
@@ -168,8 +157,7 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         else:
             return optimizer
     
-    
-class OMPDeepTIMeModel(PastCovariatesTorchModel):
+class TimeDependentDeepTIMeModel(PastCovariatesTorchModel):
     def __init__(
         self,
         input_chunk_length: int,
@@ -179,10 +167,6 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
-        n_nonzero_coefs: int = 15,
-        omp_tolerance: float = 1e-2,
-        tau: float = 1e-3,
-        hard: bool = True,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -196,10 +180,6 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
-        self.n_nonzero_coefs = n_nonzero_coefs
-        self.omp_tolerance = omp_tolerance
-        self.tau = tau
-        self.hard = hard
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -219,7 +199,7 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
         nr_params = 1 if self.likelihood is None else self.likelihood.num_parameters
         use_datetime = True if self.datetime_feats != 0 else False
         
-        return _OMPDeepTIMeModule(
+        return _TimeDependentDeepTIMeModule(
             forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,
@@ -228,9 +208,5 @@ class OMPDeepTIMeModel(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
-            n_nonzero_coefs=self.n_nonzero_coefs,
-            omp_tolerance=self.omp_tolerance,
-            tau=self.tau,
-            hard=self.hard,
             **self.pl_module_params,
             )
