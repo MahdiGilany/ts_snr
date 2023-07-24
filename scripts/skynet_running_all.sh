@@ -5,6 +5,7 @@ noise_type="laplace"
 version=benchmarkingV2
 omp_version=benchmarkingV4lambda_5
 
+
 for model_name in deeptime nbeats omp_deeptime #naive_martingle 
 do
     for dataset_name in etth2 exchange_rate traffic #ettm2
@@ -46,33 +47,27 @@ do
     done
 done
 
-# # deeptime
-# sbatch scripts/skynet_noise.sh version=benchmarkingV2 model_name=deeptime dataset_name=etth2 target_series_index=-1 multiple=7 output_chunk_length=96
 
-# sbatch scripts/skynet_noise.sh version=benchmarkingV2 model_name=deeptime dataset_name=exchange_rate target_series_index=-2 multiple=3 output_chunk_length=96
+# # test MAE
+# omp_version=test_MAE
+# n_nonzero_coefs=45
+# model_name=omp_deeptime
+# dataset_name=etth2
+# target_index=-1
+# multiple=7
+# output_chunk_length=96
+# noise_type=laplace
+# noise_std=1.2
+# loss_name=mae
 
-# sbatch scripts/skynet_noise.sh version=benchmarkingV2 model_name=deeptime dataset_name=traffic target_series_index=-1 multiple=9 output_chunk_length=96
-
-
-# # nbeats
-# sbatch scripts/skynet_noise.sh version=benchmarkingV3 model_name=nbeats dataset_name=etth2 target_series_index=-1 multiple=7 output_chunk_length=96
-
-# sbatch scripts/skynet_noise.sh version=benchmarkingV3 model_name=nbeats dataset_name=ettm2 target_series_index=-1 multiple=7 output_chunk_length=96
-
-# sbatch scripts/skynet_noise.sh version=benchmarkingV2 model_name=nbeats dataset_name=exchange_rate target_series_index=-2 multiple=3 output_chunk_length=96
-# sbatch scripts/skynet_noise_temp.sh version=benchmarkingV3genericFalse model_name=nbeats dataset_name=exchange_rate target_series_index=-2 multiple=1 output_chunk_length=96
-
-# # sbatch scripts/skynet_noise.sh version=benchmarkingV2 model_name=nbeats dataset_name=traffic target_series_index=-1 multiple=9 output_chunk_length=96
-
-
-# # # omp_deeptime
-# sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV2 model_name=omp_deeptime dataset_name=etth2 target_series_index=-1 multiple=7 output_chunk_length=96 n_nonzero_coefs=15
-
-# sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV2 model_name=omp_deeptime dataset_name=exchange_rate target_series_index=-2 multiple=3 output_chunk_length=96 n_nonzero_coefs=15
-
-# sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV2 model_name=omp_deeptime dataset_name=traffic target_series_index=-1 multiple=9 output_chunk_length=96 n_nonzero_coefs=15
+# sbatch scripts/skynet_noise_OMP.sh version=$omp_version model_name=$model_name dataset_name=$dataset_name\
+#  target_series_index=$target_index multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type\
+#  noise_std=$noise_std n_nonzero_coefs=$n_nonzero_coefs loss_fn=$loss_name 
 
 
+
+
+######################################################################################
 # # naive_martingle
 # sbatch scripts/skynet_noise_naive.sh version=benchmarkingV3 model_name=naive_martingle dataset_name=etth2 target_series_index=-1 multiple=1 output_chunk_length=96
 
@@ -96,14 +91,6 @@ done
 
 # # sbatch scripts/skynet_noise_naive.sh version=benchmarkingV2 model_name=naive_seasonal dataset_name=traffic target_series_index=-1 multiple=1 output_chunk_length=96
 
-
-# for n_nonzero_coefs in 2 5 10 15 45 75 105 135 #165 195 #225 255
-# do
-#     # omp_deeptime
-#     sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV4lambda_5 model_name=omp_deeptime dataset_name=etth2 target_series_index=-1 multiple=7 output_chunk_length=96 n_nonzero_coefs=$n_nonzero_coefs
-#     # sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV4lambda_5 model_name=omp_deeptime dataset_name=exchange_rate target_series_index=-2 multiple=3 output_chunk_length=96 n_nonzero_coefs=$n_nonzero_coefs
-#     # sbatch scripts/skynet_noise_OMP.sh version=benchmarkingV4lambda_5 model_name=omp_deeptime dataset_name=traffic target_series_index=-1 multiple=9 output_chunk_length=96 n_nonzero_coefs=$n_nonzero_coefs
-# done
 
 # for multiple in 1 3 5 7 9
 # do 

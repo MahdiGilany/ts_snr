@@ -55,6 +55,21 @@ def crossentropy_loss(num_classes=2):
     return wrap_loss    
 
 
+class TorchLosses(torch.nn.Module):
+    def __init__(self, loss_name: 'mse',*args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        
+        if loss_name == 'mse':
+            self.loss = torch.nn.MSELoss()
+        elif loss_name == 'mae':
+            self.loss = torch.nn.L1Loss()
+        elif loss_name == 'smoothl1':
+            self.loss = torch.nn.SmoothL1Loss()
+            
+    def forward(self, pred, target):
+        return self.loss(pred, target)
+    
+
 # def get_loss_fn(loss_name: str,
 #                 delta: Optional[float] = 1.0,
 #                 beta: Optional[float] = 1.0) -> Callable:

@@ -35,6 +35,7 @@ batch_size=256
 epochs=100
 lr=0.001
 patience=10
+loss_name=mse
 dataset_name="etth2"
 noise_type="gaussian"
 noise_std=0.0
@@ -79,7 +80,9 @@ python main.py name=$name\
             model.model_name=$model_name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
-            model.optimizer_kwargs.lr=$lr +model.layer_size=$layer_size\
+            model.optimizer_kwargs.lr=$lr\
+            model.loss_fn.loss_name=$loss_name\
+            +model.layer_size=$layer_size\
             +model.n_nonzero_coefs=$n_nonzero_coefs +model.omp_tolerance=$tolerance\
             data.dataset_name=$dataset_name\
             data.noise_type=$noise_type\
