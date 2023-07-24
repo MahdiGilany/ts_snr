@@ -847,6 +847,7 @@ class DifferentiableMatchingPursuit(nn.Module):
         '''
         dict = X[0, ...] # consider cloning the tensor
         # dict = dict/(F.relu(dict.norm(dim=0, keepdim=True)-1) + 1.0) # normalize the dictionary to have maximum unit norm
+        # dict = dict/dict.norm(dim=0, keepdim=True) # normalize the dictionary to have maximum unit norm
         
         chunk_length, n_atoms = dict.shape
         batch_sz, chunk_length = y.shape
@@ -918,6 +919,5 @@ class DifferentiableMatchingPursuit(nn.Module):
 
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
         W[torch.arange(batch_sz)[:, None], detached_indices] = torch.cat(nonzero_W_list, dim=1).squeeze(-1)
-        W.requires_grad = True
         return W, nonzero_W_list, nonzero_W
         
