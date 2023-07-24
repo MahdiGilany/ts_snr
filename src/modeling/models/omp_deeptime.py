@@ -54,10 +54,10 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
                        n_fourier_feats=n_fourier_feats, scales=scales)
         # self.OMP = _OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, stop=layer_size, r_thresh=omp_threshold)
         # self.OMP = OrthogonalMatchingPursuitParallel(n_nonzero_coefs=n_nonzero_coefs)
-        # self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
+        self.OMP = OrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
         # self.OMP = _DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs)
         # self.OMP = DifferentiableOrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
-        self.OMP = DifferentiableMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
+        # self.OMP = DifferentiableMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, tau=tau, hard=hard)
 
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
