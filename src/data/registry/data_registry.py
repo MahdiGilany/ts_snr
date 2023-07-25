@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from sklearn import preprocessing
 
 from darts.datasets.dataset_loaders import DatasetLoaderCSV
+from darts import concatenate
 from darts.datasets import (
     AirPassengersDataset,
     ETTh1Dataset,
@@ -171,6 +172,95 @@ _DATASETS = {
     "uber": darts_predefined_datasets(UberTLCDataset),
     
 }
+
+
+@register_dataset
+def crypto(
+    split_ratio: Tuple[float] = (0.8, 0.1, 0.1),
+    crypto_name: Union[str, Tuple(str)] = "All",
+    use_scaler: bool = True,
+    target_series_index: int = None,
+    **kwargs
+    ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
+    """Loads crypto dataset
+    Download the csv files manually from https://www.kaggle.com/competitions/g-research-crypto-forecasting/data
+    Code copied and modified from https://github.com/google-research/google-research/blob/master/KNF/data/Cryptos/cryptos_data_gen.py
+    """
+    import pandas as pd
+
+    crypto_df = pd.read_csv('~/.darts/datasets/crypto.csv')
+    asset_details_df = pd.read_csv('~/.darts/datasets/crypto_asset.csv')
+    
+    
+    if crypto_name == "All":
+        assets_df = asset_details_df
+    else:
+        assets_df = asset_details_df.query(f'Asset_Name in {crypto_name}')
+               
+    
+    assets_series = {}
+    for index, row in assets_df.iterrows():
+        asset_id = row["Asset_ID"]
+        asset_name = row["Asset_Name"]
+        
+        # set timestamps as index
+        selected_crypto_df = crypto_df[crypto_df["Asset_ID"] == asset_id].set_index("timestamp")
+        
+        # The target is 15-min residulized future returns
+        # We need to shift this feature up by 15 rows
+        # so that each data entry doesn't contain future information.
+        selected_crypto_df["Target"] = selected_crypto_df["Target"].shift(15)
+        
+        # fill nan with 0
+        selected_crypto_df = selected_crypto_df.fillna(0)
+        
+        # unknown why
+        selected_crypto_df = selected_crypto_df[20:-1]
+        
+        # zero out inf values
+        selected_crypto_df[selected_crypto_df == float('inf')] = 0
+        selected_crypto_df[selected_crypto_df == float('-inf')] = 0
+        
+        # reindex to fill missing timestamps
+        selected_crypto_df = selected_crypto_df.reindex(range(selected_crypto_df.index[0],selected_crypto_df.index[-1]+60,60),method='pad')
+        
+        # drop unused columns
+        selected_crypto_df = selected_crypto_df.drop(columns=["Asset_ID"])
+        selected_crypto_df = selected_crypto_df.rename(columns=lambda name: name + f"_{asset_name}")
+        
+        # change index timestamps to datetime for better visualization
+        selected_crypto_df = selected_crypto_df.set_index(selected_crypto_df.index.values.astype('datetime64[s]'))
+        
+        # create darts timeseries
+        crypto_series = TimeSeries.from_dataframe(selected_crypto_df)
+        
+        assets_series[asset_name] = crypto_series
+
+
+    series = concatenate(series=list(assets_series.values()), axis='component')
+    
+    # create dataseries for each crypto series
+    data_series = split_series(series, split_ratio)
+    
+    # if target_series_index is not None:
+    #     assert target_series_index<=len(series.components), f"Target series index out of range, choose it from 0 to {len(series.components)}."
+    #     component = series.components[target_series_index]
+    #     series = series[component]
+    #     print(f"Using component {component} as target series.")
+    
+    if use_scaler:
+        scaler = Scaler(scaler=preprocessing.StandardScaler())
+        train_series_scaled = scaler.fit_transform(data_series.train_series)
+        val_series_scaled = scaler.transform(data_series.val_series)
+        test_series_scaled = scaler.transform(data_series.test_series)
+        data_scaled_series = DataSeries(
+            train_series=train_series_scaled,
+            val_series=val_series_scaled,
+            test_series=test_series_scaled,
+            scaler=scaler
+            )
+        return data_scaled_series
+    return data_series
 
 # @register_dataset
 # def ettm2(
