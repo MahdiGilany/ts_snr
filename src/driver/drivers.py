@@ -18,7 +18,7 @@ from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Callback
 
 from src.utils import driver as utils
-from src.utils.metrics import calculate_metrics
+from src.utils.metrics import calculate_metrics_darts, calculate_metrics
 from src.data.registry.data_registry import DataSeries
 
 from darts.timeseries import TimeSeries
@@ -31,12 +31,23 @@ from tqdm import tqdm
 log = utils.get_logger(__name__)
 
 
+def sliding_window(
+    series: TimeSeries,
+    window_size: int,
+):
+    series_values = series.values()
+    series_length = len(series)
+    return np.array([
+        series_values[i:i+window_size]
+        for i in range(series_length-window_size+1)
+        ])
+
 def historical_forecast(
     model: TorchForecastingModel,
     test_series: TimeSeries,
     input_chunk_length: int,
     output_chunk_length: int,
-    ) -> Union[TimeSeries, List[TimeSeries]]:
+    ):
     
     from torch.utils.data import DataLoader
     
@@ -85,14 +96,15 @@ def historical_forecast(
     
     # turn into TimeSeries
     list_backtest_series = []
-    for i in range(preds.shape[0]):
+    for i in tqdm(range(preds.shape[0]), desc="Turn predictions into timeseries"):
         backtest_series = TimeSeries.from_times_and_values(
             test_series.time_index[input_chunk_length+i:input_chunk_length+i+output_chunk_length],
             preds[i,...].detach().cpu().numpy(),
-            freq=test_series.freq
+            freq=test_series.freq,
+            columns=test_series.components
             )
         list_backtest_series.append(backtest_series)
-    return list_backtest_series, targets
+    return list_backtest_series, preds.squeeze(-1).numpy(), targets.numpy()
     
     
 def eval_model(
@@ -150,7 +162,7 @@ def eval_model(
     # train_val_test_series_trimmed = test_series_backtest
 
     log.info("Backtesting the model without retraining (testing on test series)")
-    list_backtest_series, test_targets = historical_forecast(
+    list_backtest_series, test_preds, test_targets = historical_forecast(
         model=model,
         test_series=train_val_test_series_trimmed,
         input_chunk_length=input_chunk_length,
@@ -176,91 +188,113 @@ def eval_model(
     #     )
     #####################################################
     
-    # rollinig predictions
-    lengths_preds = min(3*output_chunk_length, len(test_series))
-    rolling_pred = model.predict(
-        series=train_val_series_trimmed,
-        n=lengths_preds
-        ) # assumed val_series is bigger than input_chunk_length
-    rolling_pred_middle = model.predict(
-        series=train_val_test_series_trimmed[:3*len(train_val_test_series_trimmed)//4],
-        n=lengths_preds
-        ) 
-    rolling_pred_end = model.predict(
-        series=train_val_test_series_trimmed,
-        n=lengths_preds
-        ) 
+    # # rollinig predictions
+    # lengths_preds = min(3*output_chunk_length, len(test_series))
+    # rolling_pred = model.predict(
+    #     series=train_val_series_trimmed,
+    #     n=lengths_preds
+    #     ) # assumed val_series is bigger than input_chunk_length
+    # rolling_pred_middle = model.predict(
+    #     series=train_val_test_series_trimmed[:3*len(train_val_test_series_trimmed)//4],
+    #     n=lengths_preds
+    #     ) 
+    # rolling_pred_end = model.predict(
+    #     series=train_val_test_series_trimmed,
+    #     n=lengths_preds
+    #     ) 
     
     # unnormalize series
-    rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
-    rolling_unscaled_pred_middle = scaler.inverse_transform(rolling_pred_middle) if scaler else rolling_pred_middle
-    rolling_unscaled_pred_end = scaler.inverse_transform(rolling_pred_end) if scaler else rolling_pred_end
+    # rolling_unscaled_pred = scaler.inverse_transform(rolling_pred) if scaler else rolling_pred
+    # rolling_unscaled_pred_middle = scaler.inverse_transform(rolling_pred_middle) if scaler else rolling_pred_middle
+    # rolling_unscaled_pred_end = scaler.inverse_transform(rolling_pred_end) if scaler else rolling_pred_end
     train_val_unscaled_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
     test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
     list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
     # scaler.inverse_transform(list_backtest_series) if scaler else list_backtest_series 
     
+    # calculating results for Target components only, if available (for crypto dataset)
+    target_indices = np.array(['Target' in component for component in test_series_backtest.components])
+    if target_indices.any():
+        train_val_unscaled_series_trimmed = train_val_unscaled_series_trimmed[list(train_val_unscaled_series_trimmed.components[target_indices])]
+        test_unscaled_series = test_unscaled_series[list(test_unscaled_series.components[target_indices])]
+        list_backtest_unscaled_series = [backtest_series[list(backtest_series.components[target_indices])] for backtest_series in list_backtest_unscaled_series]
+        # test_preds = test_preds[..., target_indices]
+        test_targets = test_targets[..., target_indices]
+    
     # calculate metrics    
+    predictions = np.stack([series._xa.values for series in list_backtest_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
     log.info("Calculating metrics for backtesting")
     results = calculate_metrics(
-        [test_series]*len(list_backtest_series),
-        list_backtest_series,
-        reduction=np.array,
-        verbose=True,
-        n_jobs=-1
-        )    
+        true=sliding_window(test_series, output_chunk_length),
+        pred=predictions
+        )
+    # results = calculate_metrics_darts(
+    #     [test_series]*len(list_backtest_series),
+    #     list_backtest_series,
+    #     reduction=np.array,
+    #     verbose=True,
+    #     n_jobs=-1
+    #     )    
     
     if test_series_noisy is not None:
         log.info("Calculating metrics for backtesting using noisy test")
         results_noisy = calculate_metrics(
-            [test_series_noisy]*len(list_backtest_series),
-            list_backtest_series,
-            reduction=np.array,
-            verbose=True,
-            n_jobs=-1
+            true=sliding_window(test_series_backtest, output_chunk_length),
+            pred=predictions
             )
+        # results_noisy = calculate_metrics_darts(
+        #     [test_series_noisy]*len(list_backtest_series),
+        #     list_backtest_series,
+        #     reduction=np.array,
+        #     verbose=True,
+        #     n_jobs=-1
+        #     )
     
     log.info("Calculating metrics for unnormalized backtesting")
     results_unscaled = calculate_metrics(
-        [test_unscaled_series]*len(list_backtest_unscaled_series),
-        list_backtest_unscaled_series, 
-        reduction=np.array,
-        verbose=True,
-        n_jobs=-1
+        true=sliding_window(test_unscaled_series, output_chunk_length),
+        pred=predictions
         )
+    # results_unscaled = calculate_metrics_darts(
+    #     [test_unscaled_series]*len(list_backtest_unscaled_series),
+    #     list_backtest_unscaled_series, 
+    #     reduction=np.array,
+    #     verbose=True,
+    #     n_jobs=-1
+    #     )
     
-    log.info("Calculating metrics for rolling predictions")
-    results_pred = calculate_metrics(
-        test_series,
-        rolling_pred[:output_chunk_length],
-        reduction=np.array,
-        verbose=False,
-        n_jobs=1,
-        )
-    results_pred_middle = calculate_metrics(
-        test_series,
-        rolling_pred_middle[:output_chunk_length],
-        reduction=np.array,
-        verbose=False,
-        n_jobs=1,
-    )
+    # log.info("Calculating metrics for rolling predictions")
+    # results_pred = calculate_metrics_darts(
+    #     test_series,
+    #     rolling_pred[:output_chunk_length],
+    #     reduction=np.array,
+    #     verbose=False,
+    #     n_jobs=1,
+    #     )
+    # results_pred_middle = calculate_metrics_darts(
+    #     test_series,
+    #     rolling_pred_middle[:output_chunk_length],
+    #     reduction=np.array,
+    #     verbose=False,
+    #     n_jobs=1,
+    # )
     
     
-    results = {
-        result_name: np.vstack(results[result_name])
-        for result_name in results.keys()
-        if not np.isnan(np.array(results[result_name])).any()
-        }
-    results_noisy = {
-        result_name: np.vstack(results_noisy[result_name])
-        for result_name in results_noisy.keys()
-        if not np.isnan(np.array(results_noisy[result_name])).any()
-        }
-    results_unscaled = {
-        result_name: np.vstack(results_unscaled[result_name])
-        for result_name in results_unscaled.keys()
-        if not np.isnan(np.array(results_unscaled[result_name])).any()
-        }
+    # results = {
+    #     result_name: np.vstack(results[result_name])
+    #     for result_name in results.keys()
+    #     if not np.isnan(np.array(results[result_name])).any()
+    #     }
+    # results_noisy = {
+    #     result_name: np.vstack(results_noisy[result_name])
+    #     for result_name in results_noisy.keys()
+    #     if not np.isnan(np.array(results_noisy[result_name])).any()
+    #     }
+    # results_unscaled = {
+    #     result_name: np.vstack(results_unscaled[result_name])
+    #     for result_name in results_unscaled.keys()
+    #     if not np.isnan(np.array(results_unscaled[result_name])).any()
+    #     }
     
     # for visualizing backtest, we use last points only
     backtest_unscaled_series = concatenate([backtest_series[-1:] for backtest_series in list_backtest_unscaled_series]) # semi-colon is important!!!
@@ -284,15 +318,15 @@ def eval_model(
             for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
             })
         
-        wandb.log({
-            f"test_best_pred_{result_name}": results_value.mean()
-            for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
-            })
+        # wandb.log({
+        #     f"test_best_pred_{result_name}": results_value.mean()
+        #     for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
+        #     })
         
-        wandb.log({
-            f"test_best_pred_middle_{result_name}": results_value.mean()
-            for result_name, results_value in results_pred_middle.items() if not np.isnan(results_value).any()
-            })
+        # wandb.log({
+        #     f"test_best_pred_middle_{result_name}": results_value.mean()
+        #     for result_name, results_value in results_pred_middle.items() if not np.isnan(results_value).any()
+        #     })
         
         # plot
         for i, component in reversed(list(enumerate(test_series.components))):
@@ -309,19 +343,19 @@ def eval_model(
                 for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
                 })
         
-            wandb.log({
-                f"test_best_pred_{result_name}_{component}": results_value[..., i].mean()
-                for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
-                })
+            # wandb.log({
+            #     f"test_best_pred_{result_name}_{component}": results_value[..., i].mean()
+            #     for result_name, results_value in results_pred.items() if not np.isnan(results_value).any()
+            #     })
             
             
             plt.figure(figsize=(5, 3))
             train_val_unscaled_series_trimmed[component].plot(label="train_val_"+ component)
             test_unscaled_series[component].plot(label="test_" + component)
-            backtest_unscaled_series[str(i)].plot(label="backtest_" + component)
-            rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
-            rolling_unscaled_pred_middle[component].plot(label="rolling_pred_middle_" + component)
-            rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
+            backtest_unscaled_series[component].plot(label="backtest_" + component)
+            # rolling_unscaled_pred[component].plot(label="rolling_pred_" + component)
+            # rolling_unscaled_pred_middle[component].plot(label="rolling_pred_middle_" + component)
+            # rolling_unscaled_pred_end[component].plot(label="rolling_pred_end_" + component)
             # plt.title(configs.model.model_name + configs.data.dataset_name + component)
             wandb.log({"Media": plt})
             
@@ -331,7 +365,7 @@ def eval_model(
                 train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
                 test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
                 [
-                    series[str(i)].plot(label="pred_" + component)
+                    series[component].plot(label="pred_" + component)
                     for j, series in enumerate(list_backtest_series)
                     if j%output_chunk_length==0
                  ]
@@ -340,7 +374,7 @@ def eval_model(
                 plt.figure(figsize=(5, 3))
                 test_series[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
                 [
-                    series[str(i)].plot(label="pred_" + component)
+                    series[component].plot(label="pred_" + component)
                     for j, series in enumerate(list_backtest_series)
                     if j%output_chunk_length==0
                  ]

@@ -76,7 +76,7 @@ def rse(
     return np.sqrt(np.sum((y1 - y2) ** 2)) / np.sqrt(np.sum((y1 - y1.mean()) ** 2))
 
 
-def calculate_metrics(true, pred, only_mse=False, **kwargs):
+def calculate_metrics_darts(true, pred, only_mse=False, **kwargs):
     try:
         _mse = mse(true, pred, **kwargs)
     except:
@@ -127,6 +127,86 @@ def calculate_metrics(true, pred, only_mse=False, **kwargs):
     
     try:
         _r2 = r2_score(true, pred, **kwargs)
+    except:
+        _r2 = torch.tensor(np.nan)
+    
+    return {'mae': _mae,
+            'mse': _mse,
+            'rmse': _rmse,
+            'mape': _mape,
+            'smape': _smape,
+            'corr': _corr,
+            'rse': _rse,
+            # 'ope': _ope,
+            # 'mase': _mase,
+            'r2': _r2,
+            }
+    
+    # return {'mae': mae(true, pred),
+    #         'mse': mse(true, pred),
+    #         'rmse': rmse(true, pred),
+    #         'mape': mape(true, pred),
+    #         'smape': smape(true, pred),
+    #         'ope': ope(true, pred)}
+    
+    
+def calculate_metrics(true, pred, only_mse=False, **kwargs):
+    try:
+        _mse = ((true - pred) ** 2).mean(axis=1)
+    except:
+        _mse = np.nan
+        
+    if only_mse:
+        return {'mse': _mse}
+        
+    try:
+        _mae =  np.abs(true - pred).mean(axis=1)
+    except:
+        _mae = np.nan
+    
+    try:
+        _rmse = np.sqrt(_mse)
+    except:
+        _rmse = np.nan
+    
+    try:
+        _mape = 100.0 * np.abs((true - pred) / true).mean(axis=1)
+    except:
+        _mape = np.nan
+    
+    try:
+        _smape = 200.0 * (np.abs(true - pred) / (np.abs(true) + np.abs(pred))).mean(axis=1)
+    except:
+        _smape = np.nan
+        
+    try: 
+        u = ((true - true.mean(axis=1, keepdims=True)) * (pred - pred.mean(axis=1, keepdims=True))).sum(axis=1, keepdims=True)
+        d = np.sqrt(((true - true.mean(axis=1, keepdims=True)) ** 2 * (pred - pred.mean(axis=1, keepdims=True)) ** 2).sum(axis=1, keepdims=True))
+        _corr = (u / d).mean(axis=1)
+    except:
+        _corr = np.nan
+    
+    try:
+        _rse = np.sqrt((true - pred) ** 2).sum(axis=1, keepdims=True) / np.sqrt(((true - true.mean(axis=1, keepdims=True)) ** 2).sum(axis=1, keepdims=True))
+    except:
+        _rse = np.nan
+    
+    # try:
+    #     _ope = ope(true, pred, **kwargs)
+    # except:
+    #     _ope = torch.tensor(np.nan)
+        
+    # try:
+    #     _mase = mase(true, pred, **kwargs)
+    # except:
+    #     _mase = torch.tensor(np.nan)
+    
+    try:
+        ss_errors = ((true - pred) ** 2).sum(axis=1, keepdims=True)
+        y_hat = true.mean(axis=1, keepdims=True)
+        ss_tot = ((true - y_hat) ** 2).sum(axis=1, keepdims=True)
+        _r2 = 1 - ss_errors / ss_tot
+
     except:
         _r2 = torch.tensor(np.nan)
     
