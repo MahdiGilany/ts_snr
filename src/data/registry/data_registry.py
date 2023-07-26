@@ -177,8 +177,23 @@ _DATASETS = {
 @register_dataset
 def crypto(
     split_ratio: Tuple[float] = (0.8, 0.1, 0.1),
-    crypto_name: Union[str, Tuple(str)] = "All",
+    crypto_name: Union[str, Tuple[str]] = "All", 
+    # ('Bitcoin Cash',
+    # 'Binance Coin' ,
+    # 'Bitcoin',
+    # 'EOS.IO',
+    # 'Ethereum Classic',
+    # 'Ethereum',
+    # 'Litecoin',
+    # 'Monero',
+    # 'TRON',
+    # 'Stellar',
+    # 'Cardano',
+    # 'IOTA',
+    # 'Maker',
+    # 'Dogecoin')
     use_scaler: bool = True,
+    prct_rows_to_load: float = 1.0,
     target_series_index: int = None,
     **kwargs
     ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
@@ -188,9 +203,15 @@ def crypto(
     """
     import pandas as pd
 
-    crypto_df = pd.read_csv('~/.darts/datasets/crypto.csv')
-    asset_details_df = pd.read_csv('~/.darts/datasets/crypto_asset.csv')
+    LEN_CRYPTO = 24236806
     
+    nrows = int(prct_rows_to_load * LEN_CRYPTO)
+    
+    asset_details_df = pd.read_csv('~/.darts/datasets/crypto_asset.csv')
+    crypto_df = pd.read_csv('~/.darts/datasets/crypto.csv', nrows=nrows)
+    
+    # dropped Dogecoin since it is short
+    asset_details_df = asset_details_df.drop(index=13)
     
     if crypto_name == "All":
         assets_df = asset_details_df
@@ -237,6 +258,13 @@ def crypto(
         assets_series[asset_name] = crypto_series
 
 
+    # intersecting the series to find the common time range
+    minumum_len_index = np.array([len(asset_series) for asset_series in assets_series.values()]).argmin()
+    smallest_series = assets_series[list(assets_series.keys())[minumum_len_index]]
+    start_time, end_time = smallest_series.time_index[0], smallest_series.time_index[-1]
+    assets_series = {name: series.slice(start_ts=start_time, end_ts=end_time) for name, series in assets_series.items()}
+
+    # concatenate all series
     series = concatenate(series=list(assets_series.values()), axis='component')
     
     # create dataseries for each crypto series
