@@ -45,6 +45,7 @@ new_dir=True
 verbose=False
 multiple=7
 output_chunk_length=96
+input_chunk_length=-1
 
 # parse arguments
 for ARGUMENT in "$@"
@@ -67,7 +68,10 @@ for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
-input_chunk_length=$((output_chunk_length * multiple))
+if [ $input_chunk_length == -1 ]
+then
+    input_chunk_length=$((output_chunk_length * multiple))
+fi
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_nonzero${n_nonzero_coefs}_noise_${noise_type}_std${noise_std}_v${version}"
 name="${group}_seed${seed}_tol${tolerance}"
 

@@ -43,6 +43,7 @@ new_dir=True
 verbose=False
 multiple=7
 output_chunk_length=96
+input_chunk_length=-1
 
 # parse arguments
 for ARGUMENT in "$@"
@@ -59,11 +60,14 @@ done
 # python scripts/test.py
 
 # set name, group, and input chunk length
-input_chunk_length=$((output_chunk_length * multiple))
+if [ $input_chunk_length == -1 ]
+then
+    input_chunk_length=$((output_chunk_length * multiple))
+fi
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_${noise_type}_std${noise_std}_v${version}"
 name="${group}_seed${seed}"
 
-group=null
+# group=null
 
 echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
