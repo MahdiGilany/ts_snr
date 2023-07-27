@@ -447,11 +447,15 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             dict = torch.concat([dict, ones], dim=-1)
 
         # dict = dict/(F.relu(dict.norm(dim=1, keepdim=True)-1) + 1.0)
+        # batch_sz = dict.shape[0]
+        # dict = torch.linalg.qr(dict[0, ...])[0].repeat(batch_sz, 1, 1)
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
         '''Orthogonal Matching pursuit algorithm
         '''
+        # breakpoint()
+        # X = torch.linalg.qr(X[0, ...])[0].repeat(y.shape[0], 1, 1) # QR decomposition
         # X = X/(F.relu(X.norm(dim=1, keepdim=True)-1) + 1.0)
         dict = X[0, ...].detach().clone() # consider cloning the tensor
         # dict = dict/(F.relu(dict.norm(dim=0, keepdim=True)-1) + 1.0) # normalize the dictionary to have maximum unit norm
@@ -506,6 +510,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # linear solve
             _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff.detach()) # TODO: add multipath OMP
             solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, n_nonzero_coefs, 1)
+            # solutions = _selected_DTy.cholesky_solve(torch.linalg.cholesky(_selected_DTD))
 
             # finally get residuals r=y-Wx
             residuals[:, :, None] = y[:, :, None] - _selected_D @ solutions
@@ -530,6 +535,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         atomsTy = selected_atoms.permute(0, 2, 1) @ y[:, :, None]
         atomsTatoms.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
         coefs = torch.linalg.solve(atomsTatoms, atomsTy)
+        # coefs = atomsTy.cholesky_solve(torch.linalg.cholesky(atomsTatoms)) # solve with cholesky decomposition        
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_atoms.dtype, device=selected_atoms.device)
         W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze()
         return W, max_score_indices, solutions
