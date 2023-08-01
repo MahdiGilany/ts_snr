@@ -525,7 +525,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
                 comment='tolerance met'
 
         # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
-        wandb.log({'rel_norm_res': norm_res/norm_y})
+        # wandb.log({'rel_norm_res': norm_res/norm_y})
 
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],

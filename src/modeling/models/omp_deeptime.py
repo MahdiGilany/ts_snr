@@ -89,10 +89,19 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         
         self.lookback_reprs = lookback_reprs
         self.time_reprs = time_reprs
-        wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
+        # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
+        
+        # # reversible intrance normalization
+        # eps = 1e-5
+        # expectation = x.mean(dim=1, keepdim=True)
+        # standard_deviation = x.std(dim=1, keepdim=True) + eps
+        # x = (x - expectation) / standard_deviation
         
         coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.OMP.forward(horizon_reprs, coef)
+        
+        # # reverse normalization
+        # preds = preds * standard_deviation + expectation
         
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
@@ -129,7 +138,6 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         )
         self._calculate_metrics(output, target, self.train_metrics)
         return loss
-
 
     def validation_step(self, val_batch, batch_idx) -> torch.Tensor:
         """performs the validation step"""
