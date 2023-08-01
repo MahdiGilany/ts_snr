@@ -73,7 +73,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
-        w, b = self.adaptive_weights(lookback_reprs.detach(), x) # w.shape = (batch_size, layer_size, output_dim)
+        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         
         # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
         # goodness_of_base_fit = (x - torch.einsum('... d o, ... t d -> ... t o', [w, lookback_reprs]) + b).squeeze(-1).norm(dim=1).mean()
