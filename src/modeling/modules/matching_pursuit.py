@@ -19,6 +19,7 @@ from sklearn.linear_model import OrthogonalMatchingPursuit
 from sklearn.linear_model import OrthogonalMatchingPursuitCV
 
 from tqdm import tqdm
+import wandb
 
 def norm2(y):
     return torch.sqrt(torch.sum(y**2, dim=(1,2)))
@@ -518,10 +519,14 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # find tolerance and stopping criteria
             i += 1
             norm_res = residuals.norm(dim=(1)).mean()
-            tolerance = (norm_res > self.tol*norm_y)
+            # tolerance = (norm_res > self.tol*norm_y)
+            tolerance = (norm_res > self.tol)
             if tolerance==False:
                 comment='tolerance met'
-        
+
+        # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
+        wandb.log({'rel_norm_res': norm_res/norm_y})
+
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
             torch.arange(chunk_length, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, :, None],
@@ -537,7 +542,11 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         coefs = torch.linalg.solve(atomsTatoms, atomsTy)
         # coefs = atomsTy.cholesky_solve(torch.linalg.cholesky(atomsTatoms)) # solve with cholesky decomposition        
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_atoms.dtype, device=selected_atoms.device)
-        W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze()
+        W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze(-1)
+        
+        goodness_of_base_fit = (y[:, :, None] - torch.bmm(X, W[:, :, None])).squeeze(-1).norm(dim=(1)).mean()
+        wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
+    
         return W, max_score_indices, solutions
     
     @property
@@ -773,7 +782,8 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 nonzero_W = torch.linalg.solve(selected_DTD, selected_DTy) # (batch_sz, i+1, 1)
 
                 # finally get residuals r=y-Wx
-                residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)                    
+                residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)   
+                # norm_res = residuals.norm(dim=(1)).mean()                 
                     
             else:
                 max_score_indices.append(soft_score_indices[:, :, None]) # list[(batch_sz, n_atoms)] * i+1
@@ -794,6 +804,7 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 # finally get residuals r=y-Wx
                 residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)        
         
+        wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
 
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
         W[torch.arange(batch_sz)[:, None], detached_indices] = nonzero_W.squeeze(-1)

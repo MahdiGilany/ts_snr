@@ -10,6 +10,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.optim.lr_scheduler import LambdaLR
 import math
+import wandb
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
@@ -72,9 +73,15 @@ class _DeepTIMeModule(PLPastCovariatesModule):
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
-        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
-        preds = self.forecast(horizon_reprs, w, b)
+        w, b = self.adaptive_weights(lookback_reprs.detach(), x) # w.shape = (batch_size, layer_size, output_dim)
         
+        # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
+        # goodness_of_base_fit = (x - torch.einsum('... d o, ... t d -> ... t o', [w, lookback_reprs]) + b).squeeze(-1).norm(dim=1).mean()
+        # wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
+        # wandb.log({'rel_norm_res': goodness_of_base_fit/x.squeeze(-1).norm(dim=1).mean()})
+        
+        preds = self.forecast(horizon_reprs, w, b)       
+         
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )

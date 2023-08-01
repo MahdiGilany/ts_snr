@@ -10,7 +10,7 @@ from torch import Tensor
 import torch.nn as nn
 from torch.optim.lr_scheduler import LambdaLR
 import math
-
+import wandb
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
 from ..modules.matching_pursuit import (
@@ -86,6 +86,11 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, lookback_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
+        
+        self.lookback_reprs = lookback_reprs
+        self.time_reprs = time_reprs
+        wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
+        
         coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.OMP.forward(horizon_reprs, coef)
         
@@ -94,6 +99,52 @@ class _OMPDeepTIMeModule(PLPastCovariatesModule):
         )
         return preds
 
+    def _compute_regularization_loss(self) -> torch.Tensor:
+        return 0.0*self.lookback_reprs.norm(dim=1).mean()
+        # return 0.005*self.time_reprs.norm(dim=1).mean()
+        # dict = self.lookback_reprs[0,...]
+        # return 0.001*(((dict.T @ dict) - torch.eye(self.layer_size).to(dict.device))**2).mean()
+    
+    def training_step(self, train_batch, batch_idx) -> torch.Tensor:
+        """performs the training step"""
+        output = self._produce_train_output(train_batch[:-1])
+        target = train_batch[
+            -1
+        ]  # By convention target is always the last element returned by datasets
+        _loss = self._compute_loss(output, target)
+        loss = _loss + self._compute_regularization_loss()
+        self.log(
+            "train_reg_loss",
+            loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self.log(
+            "train_loss",
+            _loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.train_metrics)
+        return loss
+
+
+    def validation_step(self, val_batch, batch_idx) -> torch.Tensor:
+        """performs the validation step"""
+        output = self._produce_train_output(val_batch[:-1])
+        target = val_batch[-1]
+        loss = self._compute_loss(output, target)
+        self.log(
+            "val_loss",
+            loss,
+            batch_size=val_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.val_metrics)
+        return loss
 
     def get_coords(self, lookback_len: int, horizon_len: int) -> torch.Tensor:
         coords = torch.linspace(0, 1, lookback_len + horizon_len)
