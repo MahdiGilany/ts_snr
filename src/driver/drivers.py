@@ -42,6 +42,7 @@ def sliding_window(
         for i in range(series_length-window_size+1)
         ])
 
+
 def historical_forecast(
     model: TorchForecastingModel,
     test_series: TimeSeries,
@@ -155,6 +156,7 @@ def eval_model(
     
     # get historical forecasts
     from darts.timeseries import concatenate 
+    components = test_series.components
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
     num_trimmed_train_val = max(len(test_series_backtest),input_chunk_length)
     train_val_series_trimmed = concatenate([train_series, val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
@@ -215,11 +217,16 @@ def eval_model(
     # calculating results for Target components only, if available (for crypto dataset)
     target_indices = np.array(['Target' in component for component in test_series_backtest.components])
     if target_indices.any():
-        train_val_unscaled_series_trimmed = train_val_unscaled_series_trimmed[list(train_val_unscaled_series_trimmed.components[target_indices])]
-        test_unscaled_series = test_unscaled_series[list(test_unscaled_series.components[target_indices])]
-        list_backtest_unscaled_series = [backtest_series[list(backtest_series.components[target_indices])] for backtest_series in list_backtest_unscaled_series]
+        components = list(test_series.components[target_indices])
+        test_series = test_series[components] 
+        test_series_backtest = test_series_backtest[components]
+        test_unscaled_series = test_unscaled_series[components]
+        list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
+        
+        # train_val_unscaled_series_trimmed = train_val_unscaled_series_trimmed[list(train_val_unscaled_series_trimmed.components[target_indices])]
+        # list_backtest_unscaled_series = [backtest_series[list(backtest_series.components[target_indices])] for backtest_series in list_backtest_unscaled_series]
         # test_preds = test_preds[..., target_indices]
-        test_targets = test_targets[..., target_indices]
+        # test_targets = test_targets[..., target_indices]
     
     # calculate metrics    
     predictions = np.stack([series._xa.values for series in list_backtest_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
@@ -329,8 +336,8 @@ def eval_model(
         #     })
         
         # plot
-        for i, component in reversed(list(enumerate(test_series.components))):
-            if i<(len(test_series.components)-10): # only plot 10 components
+        for i, component in reversed(list(enumerate(components))):
+            if i<(len(components)-10): # only plot 10 components
                 break
             
             wandb.log({
@@ -360,7 +367,7 @@ def eval_model(
             wandb.log({"Media": plt})
             
             # plot scaled version and a couple of predictions
-            if i==len(test_series.components)-1:
+            if (i==len(components)-1) or 'Target' in component:
                 plt.figure(figsize=(5, 3))
                 train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
                 test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
@@ -383,7 +390,7 @@ def eval_model(
     return results, list_backtest_series
                 
     
-def eval_localforecasting_model(
+def eval_localforecasting_model( 
     model: LocalForecastingModel,
     configs: DictConfig,
     data_series: DataSeries,
@@ -404,6 +411,7 @@ def eval_localforecasting_model(
     
     # get historical forecasts
     from darts.timeseries import concatenate 
+    components = test_series.components
     test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
     train_val_series = concatenate([train_series, val_series])[len(val_series):] # remove the size of val series from the beginning for fair comparison
     train_val_test_series = concatenate([train_val_series, test_series_backtest])
@@ -530,8 +538,8 @@ def eval_localforecasting_model(
             })
         
         # plot
-        for i, component in reversed(list(enumerate(test_series.components))):
-            if i<(len(test_series.components)-10): # only plot 10 components
+        for i, component in reversed(list(enumerate(components))):
+            if i<(len(components)-10): # only plot 10 components
                 break
             
             wandb.log({
@@ -561,7 +569,7 @@ def eval_localforecasting_model(
             wandb.log({"Media": plt})
             
             # plot scaled version and a couple of predictions
-            if i==len(test_series.components)-1:
+            if i==len(components)-1:
                 plt.figure(figsize=(5, 3))
                 train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
                 test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
