@@ -273,14 +273,15 @@ def crypto(
     # concatenate all series
     series = concatenate(series=list(assets_series.values()), axis='component')
     
+    if target_series_index is not None:
+        assert target_series_index<=len(series.components), f"Target series index out of range, choose it from 0 to {len(series.components)}."
+        component = series.components[target_series_index]
+        series = series[component]
+        print(f"Using component {component} as target series.")
+    
     # create dataseries for each crypto series
     data_series = split_series(series, split_ratio)
     
-    # if target_series_index is not None:
-    #     assert target_series_index<=len(series.components), f"Target series index out of range, choose it from 0 to {len(series.components)}."
-    #     component = series.components[target_series_index]
-    #     series = series[component]
-    #     print(f"Using component {component} as target series.")
     
     if use_scaler:
         scaler = Scaler(scaler=preprocessing.StandardScaler())
