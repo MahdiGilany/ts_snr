@@ -367,14 +367,18 @@ def eval_model(
             wandb.log({"Media": plt})
             
             # plot scaled version and a couple of predictions
-            if (i==len(components)-1) or 'Target' in component:
+            if (i==len(components)-1) or ('Target' in component):
                 plt.figure(figsize=(5, 3))
                 train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
                 test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
+                
+                no_rainbow_plots = 100
+                plot_interval = output_chunk_length if len(list_backtest_series)//output_chunk_length<no_rainbow_plots else len(list_backtest_series)//no_rainbow_plots
+                
                 [
                     series[component].plot(label="pred_" + component)
                     for j, series in enumerate(list_backtest_series)
-                    if j%output_chunk_length==0
+                    if j%plot_interval==0
                  ]
                 wandb.log({"Media": plt})
                 
@@ -383,7 +387,7 @@ def eval_model(
                 [
                     series[component].plot(label="pred_" + component)
                     for j, series in enumerate(list_backtest_series)
-                    if j%output_chunk_length==0
+                    if j%plot_interval==0
                  ]
                 wandb.log({"Media": plt})
                 
@@ -809,7 +813,6 @@ def inference_darts_lightning_driver_run(configs: DictConfig):
         )
 
     return model, data_series, metrics
-
 
 
 def darts_localforecasting_driver_run(configs: DictConfig):
