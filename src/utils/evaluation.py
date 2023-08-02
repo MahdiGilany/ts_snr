@@ -276,6 +276,7 @@ def eval_model(
         test_series_backtest = test_series_backtest[components]
         test_unscaled_series = test_unscaled_series[components]
         list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
+        list_backtest_unscaled_series = [backtest_series[components] for backtest_series in list_backtest_unscaled_series]
     
     
     # calculate metrics    
