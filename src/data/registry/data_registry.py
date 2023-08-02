@@ -222,8 +222,9 @@ def crypto(
     if crypto_name == "All":
         assets_df = asset_details_df
     else:
+        if isinstance(crypto_name, str):
+            crypto_name = (crypto_name,)
         assets_df = asset_details_df.query(f'Asset_Name in {crypto_name}')
-               
     
     assets_series = {}
     for index, row in assets_df.iterrows():
