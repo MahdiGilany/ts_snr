@@ -131,6 +131,9 @@ def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
         ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
         """Creates a Darts dataset from a Darts DatasetLoaderCSV class.
         """
+        if isinstance(split_ratio, str):
+            split_ratio = tuple(map(float, split_ratio.split()))
+        
         series = DatasetClass().load().astype(np.float32)
         
         if target_series_index is not None:
@@ -202,9 +205,12 @@ def crypto(
     Code copied and modified from https://github.com/google-research/google-research/blob/master/KNF/data/Cryptos/cryptos_data_gen.py
     """
     import pandas as pd
-
-    LEN_CRYPTO = 24236806
     
+    if isinstance(split_ratio, str):
+        split_ratio = tuple(map(float, split_ratio.split()))
+    
+    LEN_CRYPTO = 24236806
+    # breakpoint()
     nrows = int(prct_rows_to_load * LEN_CRYPTO)
     
     asset_details_df = pd.read_csv('~/.darts/datasets/crypto_asset.csv')
