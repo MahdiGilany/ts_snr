@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=3-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti10
+#SBATCH --exclude=compute1080ti06,compute1080ti07,compute1080ti08,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
