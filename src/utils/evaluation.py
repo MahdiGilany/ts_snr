@@ -68,7 +68,7 @@ def wandb_log_results_and_plots(
     
     # plot
     for i, component in reversed(list(enumerate(components))):
-        if i<(len(components)-10): # only plot 10 components
+        if i<(len(components)-14): # only plot 14 components
             break
         
         wandb.log({
