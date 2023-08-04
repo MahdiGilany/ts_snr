@@ -488,12 +488,12 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             max_score_indices[:, i] = projections.abs().sum(-1).argmax(-1).detach() # Sum is just a squeeze, but would be relevant in SOMP.
             
             # update selected_D
-            _selected_D = selected_D[:, :, :i + 1]
+            _selected_D = selected_D[:, :, :i + 1] # (batch_sz, chunk_length, i+1)
             curr_atoms = dict[:, max_score_indices[:, i]] # select the atom with the max score (chunk_length, batch_sz)
             _selected_D[:, :, i] = curr_atoms.T # an atom is added to sparse W per each datum in the batch at each iteration
 
             # update selected_DTy based on the current atom
-            _selected_DTy = selected_DTy[:, :i + 1]
+            _selected_DTy = selected_DTy[:, :i + 1] # (batch_sz, i+1, 1)
             _selected_DTy[:, i, 0] = torch.bmm(_selected_D[:, :, i:i+1].permute(0, 2, 1), y[:, :, None]).squeeze() # (batch_sz, 1, chunk_length) * (batch_sz, chunk_length, 1) -> (batch_sz, 1, 1) 
 
             
@@ -510,7 +510,7 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             # solutions = cholesky_solve(_selected_DTD, _selected_DTy)
             # linear solve
             _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff.detach()) # TODO: add multipath OMP
-            solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, n_nonzero_coefs, 1)
+            solutions = torch.linalg.solve(_selected_DTD, _selected_DTy) # (batch_sz, i+1, 1)
             # solutions = _selected_DTy.cholesky_solve(torch.linalg.cholesky(_selected_DTD))
 
             # finally get residuals r=y-Wx
@@ -938,3 +938,148 @@ class DifferentiableMatchingPursuit(nn.Module):
         W[torch.arange(batch_sz)[:, None], detached_indices] = torch.cat(nonzero_W_list, dim=1).squeeze(-1)
         return W, nonzero_W_list, nonzero_W
         
+
+# Orthogonal matching pursuit for many inrs    
+class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
+    def __init__(
+        self,
+        n_nonzero_coefs: int,
+        tol: float = 0.001,
+        lambda_init: Optional[float] = -5.,
+        bias: bool = True,
+        ):
+        super().__init__()
+        
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=False) # lambda is fixed and doesn't get updated during training
+
+        self.n_nonzero_coefs = n_nonzero_coefs
+        self.tol = tol
+        self.bias = bias
+    
+    def fit(self, dict: Tensor, y: Tensor):
+        if self.bias:
+            # bias added
+            ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
+            dict = torch.concat([dict, ones], dim=-1)
+            
+        assert y.shape[-1] == 1, 'OMP only supports single output so far'
+        
+        self.coef, _, _ = self.omp(dict, y[:, :, 0]) # only one dimension is supported so far
+        return self.coef
+    
+    def forward(self, dict: Tensor, coef: Tensor = None) -> Tensor:
+        if coef is None:
+            coef = self.coef
+        
+        if self.bias:
+            # adding bias term
+            ones = torch.ones(dict.shape[0], dict.shape[1], 1, device=dict.device)
+            dict = torch.concat([dict, ones], dim=-1) # (n_inrs, chunk_length, n_atoms+1)
+        
+        n_inrs, chunk_length, n_atoms_1 = dict.shape
+        dict = dict.permute(1, 0, 2).reshape(1, chunk_length, -1) # (1, chunk_length, n_inrs*n_atoms)
+        return torch.bmm(dict, coef.unsqueeze(-1))
+        
+    def omp(self, X: Tensor, y: Tensor):
+        '''Many INRs Orthogonal Matching pursuit algorithm
+        '''
+        dict = X.detach().clone() # consider cloning the tensor
+        
+        n_inrs, chunk_length, n_atoms = dict.shape
+        batch_sz, chunk_length = y.shape
+        n_nonzero_coefs = self.n_nonzero_coefs
+        
+        # DTD = dict.T @ dict
+        
+        residuals = y.clone() # (batch_sz, chunk_length)
+        max_score_indices = y.new_zeros((batch_sz, n_nonzero_coefs), dtype=torch.long) # (batch_sz, n_nonzero_coefs)
+        
+        # sparse weight matrix        
+        selected_D = torch.zeros(batch_sz, n_nonzero_coefs, chunk_length, n_atoms).to(device=dict.device, dtype=dict.dtype) # (batch_sz, chunk_length, n_nonzero_coefs)
+        selected_DTy = torch.zeros(batch_sz, n_nonzero_coefs, n_atoms, 1).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs, 1)
+        selected_DTD = torch.eye(n_nonzero_coefs*n_atoms, dtype=dict.dtype, device=dict.device)[None].repeat(batch_sz, 1, 1)
+        # selected_DTD = torch.zeros(batch_sz, n_nonzero_coefs*n_atoms, n_nonzero_coefs*n_atoms).to(device=dict.device, dtype=dict.dtype) # (batch_sz, n_nonzero_coefs*n_atoms, n_nonzero_coefs*n_atoms)
+        
+        # tolerance related 
+        norm_y = y.detach().clone().norm(dim=(1)).mean()
+        tolerance = True
+        i = 0
+        # Control stop interation with norm thresh or sparsity
+        while tolerance and i<self.n_nonzero_coefs: 
+        # for i in range(n_nonzero_coefs): 
+            # Compute the score of each atoms # matmul instead of bmm since 4 dimentional
+            projections = torch.matmul(dict.permute(0, 2, 1)[None, ...], residuals[:, None, :, None]) # (batch_sz, n_inrs, n_atoms, 1)
+            inr_scores = projections.abs().sum(2).squeeze(-1) # (batch_sz, n_inrs)  
+            max_score_indices[:, i] = inr_scores.argmax(-1).detach() # (batch_sz, ) 
+            
+            # update selected_D
+            _selected_D = selected_D[:, :i + 1, ...] # (batch_sz, i+1, chunk_length, n_atoms)
+            curr_atoms = dict[max_score_indices[:, i], ...] # select the atom with the max score (batch_sz, chunk_length, n_atoms)
+            _selected_D[:, i, ...] = curr_atoms # an atom is added to sparse W per each datum in the batch at each iteration
+
+            # update selected_DTy based on the current atom
+            _selected_DTy = selected_DTy[:, :i + 1, ...] # (batch_sz, i+1, n_atoms, 1)
+            _selected_DTy[:, i, 0] = torch.matmul(_selected_D[:, i:i+1, ...].permute(0, 1, 3, 2), y[:, None, :, None]).squeeze() # (1, 1, n_atoms, chunk_length) * (batch_sz, 1, chunk_length, 1) -> (batch_sz, 1, atoms, 1) 
+
+            # concating all selected dictionaries of size n_atoms
+            _cat_selected_D = _selected_D.permute(0, 2, 1, 3).reshape(batch_sz, chunk_length, -1) # (batch_sz, chunk_length, (i+1)*n_atoms)
+            
+            # update selected_DTD based on selected_DT or precomputed XTX.
+            _selected_DTD = selected_DTD[:, :(i + 1)*n_atoms, :(i + 1)*n_atoms]
+            
+            # Update selected_DTD by adding the new column of inner products.
+            _selected_DTD[:, :, :] = torch.matmul(_cat_selected_D.permute(0, 2, 1), _cat_selected_D) # (batch_sz, (i+1)*n_atoms, (i+1)*n_atoms)
+            
+            # concating all selected dictionaries of size n_atoms
+            _cat_selected_DTy = _selected_DTy.reshape(batch_sz, -1)[..., None] # (batch_sz, (i+1)*n_atoms, 1)
+            
+            ## solve selected_D @ solutions = y
+            # solutions = cholesky_solve(_selected_DTD, _cat_selected_DTy)
+            # linear solve
+            _selected_DTD.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff.detach()) # TODO: add multipath OMP
+            solutions = torch.linalg.solve(_selected_DTD, _cat_selected_DTy) # (batch_sz, (i+1)*n_atoms, 1)
+            # solutions = _cat_selected_DTy.cholesky_solve(torch.linalg.cholesky(_selected_DTD))
+
+            # finally get residuals r=y-Wx
+            residuals = y - (_cat_selected_D @ solutions).squeeze(-1) # (batch_sz, chunk_length)
+            
+            # find tolerance and stopping criteria
+            i += 1
+            norm_res = residuals.norm(dim=(1)).mean()
+            # tolerance = (norm_res > self.tol*norm_y)
+            tolerance = (norm_res > self.tol)
+            if tolerance==False:
+                comment='tolerance met'
+
+        # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
+        # wandb.log({'rel_norm_res': norm_res/norm_y})
+
+        X = X[None, ...] # (1, n_nonzero_coefs, chunk_length, n_atoms)
+        selected_Ds = X[
+            torch.zeros(torch.zeros(1, 1, 1, 1).to(dtype=max_score_indices.dtype, device=max_score_indices.device)),
+            max_score_indices[:, :, None, None],
+            torch.arange(chunk_length, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, :, None],
+            torch.arange(n_atoms, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, None, :],
+            ]
+        cat_selected_Ds = selected_Ds.permute(0, 2, 1, 3).reshape(batch_sz, chunk_length, -1) # (batch_sz, chunk_length, n_nonzero_coefs*n_atoms)
+        
+        selected_DsTDs = cat_selected_Ds.permute(0, 2, 1) @ cat_selected_Ds # (batch_sz, n_nonzero_coefs*n_atoms, n_nonzero_coefs*n_atoms)
+        selected_DsTy = cat_selected_Ds.permute(0, 2, 1) @ y[:, :, None] # (batch_sz, n_nonzero_coefs*n_atoms, 1)
+        selected_DsTDs.diagonal(dim1=-2, dim2=-1).add_(self.reg_coeff) # TODO: add multipath OMP
+        coefs = torch.linalg.solve(selected_DsTDs, selected_DsTy) # (batch_sz, n_nonzero_coefs*n_atoms, 1)
+        # coefs = selected_DsTy.cholesky_solve(torch.linalg.cholesky(selected_DsTDs)) # solve with cholesky decomposition        
+        coefs = coefs.reshape(batch_sz, n_nonzero_coefs, n_atoms) # (batch_sz, n_nonzero_coefs, n_atoms)
+        W = torch.zeros(batch_sz, n_inrs, n_atoms, dtype=selected_Ds.dtype, device=selected_Ds.device)
+        W[
+            torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None], 
+            max_score_indices[:, :, None],
+            torch.arange(n_atoms, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, :],
+            ] = coefs
+        W = W.reshape(batch_sz, -1) # (batch_sz, n_inrs*n_atoms)
+        wandb.log({'goodness_of_base_fit': norm_res})
+    
+        return W, max_score_indices, solutions
+    
+    @property
+    def reg_coeff(self) -> Tensor:
+        return F.softplus(self._lambda)

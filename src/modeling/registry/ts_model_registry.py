@@ -77,6 +77,7 @@ def omp_deeptime(
         )
     return model    
 
+
 @register_model
 def twoomp_deeptime(
     input_chunk_length: int = 24,
@@ -94,6 +95,26 @@ def twoomp_deeptime(
         **kwargs
         )
     return model    
+
+
+@register_model
+def manyinrs_omp_deeptime(
+    input_chunk_length: int = 24,
+    output_chunk_length: int = 12,
+    random_state: int = 0,
+    batch_size: int = 32,
+    **kwargs,
+):
+    from ..models.manyinrs_omp_deeptime import ManyINRsOMPDeepTIMeModel
+    model = ManyINRsOMPDeepTIMeModel(
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        random_state=random_state,
+        batch_size=batch_size,
+        **kwargs
+        )
+    return model   
+
 
 @register_model
 def nhits(
