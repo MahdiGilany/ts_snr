@@ -977,7 +977,7 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
             dict = torch.concat([dict, ones], dim=-1) # (n_inrs, chunk_length, n_atoms+1)
         
         n_inrs, chunk_length, n_atoms_1 = dict.shape
-        dict = dict.permute(1, 0, 2).reshape(1, chunk_length, -1) # (1, chunk_length, n_inrs*n_atoms)
+        dict = dict.permute(1, 0, 2).reshape(1, chunk_length, -1).repeat(coef.shape[0],1,1) # (batchsz, chunk_length, n_inrs*n_atoms)
         return torch.bmm(dict, coef.unsqueeze(-1))
         
     def omp(self, X: Tensor, y: Tensor):
@@ -1019,7 +1019,7 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
 
             # update selected_DTy based on the current atom
             _selected_DTy = selected_DTy[:, :i + 1, ...] # (batch_sz, i+1, n_atoms, 1)
-            _selected_DTy[:, i, 0] = torch.matmul(_selected_D[:, i:i+1, ...].permute(0, 1, 3, 2), y[:, None, :, None]).squeeze() # (1, 1, n_atoms, chunk_length) * (batch_sz, 1, chunk_length, 1) -> (batch_sz, 1, atoms, 1) 
+            _selected_DTy[:, i, :, 0] = torch.matmul(_selected_D[:, i:i+1, ...].permute(0, 1, 3, 2), y[:, None, :, None]).squeeze() # (1, 1, n_atoms, chunk_length) * (batch_sz, 1, chunk_length, 1) -> (batch_sz, 1, atoms, 1) 
 
             # concating all selected dictionaries of size n_atoms
             _cat_selected_D = _selected_D.permute(0, 2, 1, 3).reshape(batch_sz, chunk_length, -1) # (batch_sz, chunk_length, (i+1)*n_atoms)
@@ -1056,7 +1056,7 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
 
         X = X[None, ...] # (1, n_nonzero_coefs, chunk_length, n_atoms)
         selected_Ds = X[
-            torch.zeros(torch.zeros(1, 1, 1, 1).to(dtype=max_score_indices.dtype, device=max_score_indices.device)),
+            torch.zeros(1, 1, 1, 1).to(dtype=max_score_indices.dtype, device=max_score_indices.device),
             max_score_indices[:, :, None, None],
             torch.arange(chunk_length, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, :, None],
             torch.arange(n_atoms, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, None, :],
@@ -1076,6 +1076,7 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
             torch.arange(n_atoms, dtype=max_score_indices.dtype, device=max_score_indices.device)[None, None, :],
             ] = coefs
         W = W.reshape(batch_sz, -1) # (batch_sz, n_inrs*n_atoms)
+        
         wandb.log({'goodness_of_base_fit': norm_res})
     
         return W, max_score_indices, solutions
