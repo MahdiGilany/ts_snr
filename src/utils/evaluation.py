@@ -32,7 +32,11 @@ from tqdm import tqdm
 log = utils.get_logger(__name__)
 
 
-def wandb_log_bases(pl_model, lookback_len, horizon_len):
+def wandb_log_bases(
+    pl_model,
+    lookback_len,
+    horizon_len
+    ):
     # getting time representations (bases)
     pl_model.eval()
     coords = pl_model.get_coords(lookback_len, horizon_len).to(next(pl_model.parameters()).device)
@@ -53,8 +57,11 @@ def wandb_log_bases(pl_model, lookback_len, horizon_len):
     # plots_table = wandb.Table(columns=["ID", "plots"])
     x_values = np.arange(time_reprs.shape[0])
     for i in range(time_reprs.shape[1]):
-        plt.plot(x_values, time_reprs[:, i])
+        plt.plot(x_values, time_reprs[:, i], label=f"basis_{i}")
         if i%5==4:
+            # plt.axvline(x = lookback_len, color = 'red', linestyle = '--')
+            plt.plot((lookback_len,lookback_len),(-1,5), color='red', linestyle='--')
+            plt.legend()
             wandb.log({f"Plots/bases_{i-4}_{i}": plt})
             plt.figure()
         
