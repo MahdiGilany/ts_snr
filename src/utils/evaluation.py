@@ -167,6 +167,7 @@ def historical_forecasts_manual(
     test_series: TimeSeries,
     input_chunk_length: int,
     output_chunk_length: int,
+    plot_weights: bool = False,
     ):
     
     from torch.utils.data import DataLoader
@@ -197,22 +198,40 @@ def historical_forecasts_manual(
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     pl_model = pl_model.to(device) 
     pl_model.eval()
+    
     preds = []
     targets = []
+    
+    # a hack for visualizing bases weights importance for deeptime related models
+    visualized_w = 0
+    
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
     for batch in tqdm(test_dl, desc="Evaluating on test set"):
         input_series, _, _, target_series = batch
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        
         # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         pl_model.y = target_series.to(device=pl_model.device, dtype=pl_model.dtype) # a hack for setting target for twoomp model
-        
+
+        # forward pass
         pred = pl_model((input_series, _))
+        
+        if plot_weights:
+            visualized_w += pl_model.learned_w.abs().sum(0) 
         preds.append(pred.detach().cpu())
         targets.append(target_series.detach().cpu())
+    
+    # preparing torch predictions and targets (not darts.timeseries predictions) 
     preds = torch.cat(preds, dim=0)
     preds = preds.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
     targets = torch.cat(targets, dim=0)
     targets = targets.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
+    
+    # visualize bases weights importance
+    if plot_weights:
+        plt.figure()
+        plt.plot(range(len(visualized_w)), visualized_w.detach().cpu().numpy())
+        wandb.log({"Plots/weights_importance": plt})
     
     # turn into TimeSeries
     list_backtest_series = []
@@ -280,6 +299,7 @@ def eval_model(
             test_series=train_val_test_series_trimmed,
             input_chunk_length=input_chunk_length,
             output_chunk_length=output_chunk_length,
+            plot_weights=True if (("deeptime" in configs.model.model_name.lower()) and logging) else False,
             )
     
     elif forecasting_type=='local':

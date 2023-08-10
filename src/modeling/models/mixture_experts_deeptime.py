@@ -102,6 +102,9 @@ class _MixtureExpertsDeepTIMeModule(PLPastCovariatesModule):
         w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, K, output_dim)
         preds = self.forecast(horizon_reprs, w, b)       
         
+        # hack used for importance weights visualization (only first dim)
+        self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        
         # # reverse normalization
         # preds = preds * standard_deviation + expectation
         

@@ -89,6 +89,9 @@ class _TwoOMPDeepTIMeModule(PLPastCovariatesModule):
         self.coef_horizon = self.OMP.fit(horizon_reprs, y) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.OMP.forward(horizon_reprs, self.coef_lookback)
         
+        # hack used for importance weights visualization (only first dim)
+        self.learned_w = self.coef_lookback # shape = (batch_size, layer_size + 1)
+        
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )

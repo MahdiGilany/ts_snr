@@ -98,6 +98,10 @@ class _ManyINRsOMPDeepTIMeModel(PLPastCovariatesModule):
         coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.OMP.forward(horizon_reprs, coef)
         
+        
+        # hack used for importance weights visualization (only first dim)
+        self.learned_w = coef # shape = (batch_size, layer_size + 1)
+        
         # # reverse normalization
         # preds = preds * standard_deviation + expectation
         

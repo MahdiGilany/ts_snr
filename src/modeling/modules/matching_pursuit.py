@@ -524,8 +524,11 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
             if tolerance==False:
                 comment='tolerance met'
 
-        # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
-        # wandb.log({'rel_norm_res': norm_res/norm_y})
+        # try:
+            # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
+            # wandb.log({'rel_norm_res': norm_res/norm_y})
+        # except:
+        #     pass
 
         selected_atoms = X[
             torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None, None],
@@ -544,9 +547,12 @@ class OrthogonalMatchingPursuitSecondVersion(nn.Module):
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_atoms.dtype, device=selected_atoms.device)
         W[torch.arange(batch_sz, dtype=max_score_indices.dtype, device=max_score_indices.device)[:, None], max_score_indices] = coefs.squeeze(-1)
         
-        goodness_of_base_fit = (y[:, :, None] - torch.bmm(X, W[:, :, None])).squeeze(-1).norm(dim=(1)).mean()
-        wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
-    
+        try:
+            goodness_of_base_fit = (y[:, :, None] - torch.bmm(X, W[:, :, None])).squeeze(-1).norm(dim=(1)).mean()
+            wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
+        except:
+            pass
+        
         return W, max_score_indices, solutions
     
     @property
@@ -804,8 +810,11 @@ class DifferentiableOrthogonalMatchingPursuit(nn.Module):
                 # finally get residuals r=y-Wx
                 residuals = y.detach() - (selected_D @ nonzero_W).squeeze(-1) # (batch_sz, chunk_length)        
         
-        wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
-
+        try:
+            wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
+        except:
+            pass
+        
         W = torch.zeros(batch_sz, n_atoms, dtype=selected_D.dtype, device=selected_D.device)
         W[torch.arange(batch_sz)[:, None], detached_indices] = nonzero_W.squeeze(-1)
         return W, max_score_indices, nonzero_W
@@ -1051,9 +1060,12 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
             if tolerance==False:
                 comment='tolerance met'
 
-        # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
-        # wandb.log({'rel_norm_res': norm_res/norm_y})
-
+        # try:
+            # wandb.log({'norm_res': residuals.norm(dim=(1)).mean()})
+            # wandb.log({'rel_norm_res': norm_res/norm_y})
+        # except:
+        #     pass
+        
         X = X[None, ...] # (1, n_nonzero_coefs, chunk_length, n_atoms)
         selected_Ds = X[
             torch.zeros(1, 1, 1, 1).to(dtype=max_score_indices.dtype, device=max_score_indices.device),
@@ -1077,8 +1089,11 @@ class ManyINRsOrthogonalMatchingPursuitSecondVersion(nn.Module):
             ] = coefs
         W = W.reshape(batch_sz, -1) # (batch_sz, n_inrs*n_atoms)
         
-        wandb.log({'goodness_of_base_fit': norm_res})
-    
+        try:
+            wandb.log({'goodness_of_base_fit': norm_res})
+        except:
+            pass
+        
         return W, max_score_indices, solutions
     
     @property
