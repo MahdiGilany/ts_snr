@@ -5,10 +5,12 @@ import os
 
 import random
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 from typing import List, Optional, Union, Dict, Literal
+import plotly.express as px
 
 import wandb
 from omegaconf import DictConfig, OmegaConf
@@ -29,6 +31,33 @@ from tqdm import tqdm
 
 log = utils.get_logger(__name__)
 
+
+def wandb_log_bases(pl_model, lookback_len, horizon_len):
+    # getting time representations (bases)
+    pl_model.eval()
+    coords = pl_model.get_coords(lookback_len, horizon_len).to(next(pl_model.parameters()).device)
+    time_reprs = pl_model.inr(coords).squeeze(0).detach().cpu().numpy() # shape = (lookback+horizon, layer_size)
+    
+    # wandb table creation of bases
+    columns = [f"dim_{i}" for i in range(time_reprs.shape[1])]
+    # columns.insert(0, "plots")
+    columns.insert(0, "ID")
+    # bases_table = wandb.Table(columns=columns)
+    id_column = np.arange(time_reprs.shape[0]).reshape(-1, 1)
+    bases_data = np.concatenate([id_column, time_reprs], axis=1).tolist()
+    # bases_data = time_reprs.tolist() # list of layer_size number of lists each with size lookback+horizon
+    bases_table = wandb.Table(data=bases_data, columns=columns)
+    wandb.log({"Table/bases" : bases_table})
+
+    
+    # plots_table = wandb.Table(columns=["ID", "plots"])
+    x_values = np.arange(time_reprs.shape[0])
+    for i in range(time_reprs.shape[1]):
+        plt.plot(x_values, time_reprs[:, i])
+        if i%5==4:
+            wandb.log({f"Plots/bases_{i-4}_{i}": plt})
+            plt.figure()
+        
 
 def wandb_log_results_and_plots(
     results: Dict,
@@ -318,12 +347,84 @@ def eval_model(
             train_val_unscaled_series_trimmed=train_val_unscaled_series_trimmed,
             output_chunk_length=output_chunk_length,
             )
+        if "deeptime" in configs.model.model_name.lower():
+            wandb_log_bases(model.model, input_chunk_length, output_chunk_length)
                 
     return results, list_backtest_series  
 
 
 
 #############################################################
+
+# def wandb_log_bases(pl_model, lookback_len, horizon_len):
+#     # getting time representations (bases)
+#     pl_model.eval()
+#     coords = pl_model.get_coords(lookback_len, horizon_len).to(next(pl_model.parameters()).device)
+#     time_reprs = pl_model.inr(coords).squeeze(0).detach().cpu().numpy() # shape = (lookback+horizon, layer_size)
+    
+#     # wandb table creation of bases
+#     columns = [f"dim_{i}" for i in range(time_reprs.shape[1])]
+#     # columns.insert(0, "plots")
+#     columns.insert(0, "ID")
+#     # bases_table = wandb.Table(columns=columns)
+#     id_column = np.arange(time_reprs.shape[0]).reshape(-1, 1)
+#     bases_data = np.concatenate([id_column, time_reprs], axis=1).tolist()
+#     # bases_data = time_reprs.tolist() # list of layer_size number of lists each with size lookback+horizon
+#     bases_table = wandb.Table(data=bases_data, columns=columns)
+#     wandb.log({"Table/bases" : bases_table})
+
+    
+#     # plots_table = wandb.Table(columns=["ID", "plots"])
+#     x_values = np.arange(time_reprs.shape[0])
+#     for i in range(time_reprs.shape[1]):
+#         # y_values = time_reprs[:, i]
+#         # data = [[x, y] for (x, y) in zip(x_values, y_values)]
+#         # table = wandb.Table(data=data, columns = ["x", "y"])
+#         # line_plots_i = wandb.plot.line(table, "x", "y")#, title=f"basis_{i}")
+#         # plots_table.add_data(i, wandb.Image(line_plots_i))
+#         plt.plot(x_values, time_reprs[:, i])
+#         if i%5==4:
+#             wandb.log({f"Plots/bases_{i-4}_{i}": plt})
+#             plt.figure()
+#         # plots_table.add_data(i, wandb.Image(plt))
+        
+#     # wandb.log({"Table/plots" : plots_table})
+        
+
+#     # plt.figure()
+#     # for i in range(time_reprs.shape[1]):
+#     #     plt.plot(time_reprs[:, i], label=f"basis_{i}")
+#     # wandb.log({"Bases_visualization": plt})
+    
+#     # x_values = np.arange(time_reprs.shape[0])
+#     # for i in range(time_reprs.shape[1]):
+#     #     y_values = time_reprs[:, i]
+#     #     # data = [[x, y] for (x, y) in zip(x_values, y_values)]
+#     #     # table = wandb.Table(data=data, columns = ["x", "y"])
+#     #     # line_plots_i = wandb.plot.line(table, "x", "y")#, title=f"basis_{i}")
+        
+#     #     df = pd.DataFrame(dict(
+#     #         x = x_values,
+#     #         y = y_values
+#     #         ))
+        
+#     #     # Create path for Plotly figure
+#     #     path_to_plotly_html = f"./plotly_figure_{i}.html"
+        
+#     #     # plotly figure
+#     #     line_plot_i = px.line(df, x="x", y="y") #, title=f"basis_{i}")
+#     #     line_plot_i.write_html(path_to_plotly_html, auto_play = False) 
+        
+        
+#     #     bases_data[i].insert(0, wandb.Html(path_to_plotly_html))
+#     #     bases_data[i].insert(0, i)
+#     #     # bases_table.add_data(*data_list)
+
+#     # bases_table = wandb.Table(data=bases_data, columns=columns)
+#     # wandb.log({"Table/bases" : bases_table})
+#     # breakpoint()
+
+
 # def eval_globalforecasting_model(
 #     model: TorchForecastingModel,
 #     configs: DictConfig,
