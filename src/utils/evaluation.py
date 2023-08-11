@@ -217,7 +217,7 @@ def historical_forecasts_manual(
         pred = pl_model((input_series, _))
         
         if plot_weights:
-            visualized_w += pl_model.learned_w.abs().sum(0) 
+            visualized_w += pl_model.learned_w.abs().sum(0).detach().cpu().numpy()
         preds.append(pred.detach().cpu())
         targets.append(target_series.detach().cpu())
     
@@ -230,7 +230,7 @@ def historical_forecasts_manual(
     # visualize bases weights importance
     if plot_weights:
         plt.figure()
-        plt.plot(range(len(visualized_w)), visualized_w.detach().cpu().numpy())
+        plt.plot(range(len(visualized_w)), visualized_w)
         wandb.log({"Plots/weights_importance": plt})
     
     # turn into TimeSeries
