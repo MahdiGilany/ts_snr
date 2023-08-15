@@ -216,6 +216,18 @@ def historical_forecasts_manual(
         # forward pass
         pred = pl_model((input_series, _))
         
+        # # temporary pred for checking if memory view works
+        # from einops import repeat
+        # batch_size = input_series.shape[0]
+        # coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(input_series.device)
+        # time_reprs = repeat(pl_model.inr(coords), '1 t d -> b t d', b=batch_size)
+        # horizon_reprs = time_reprs[:, -output_chunk_length:] # [bz, horizon, 256]
+        # w, b = pl_model.adaptive_weights(horizon_reprs, pl_model.y) # [bz, 256, 1], [bz, 1, 1]
+        # pl_model.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        # pred = torch.bmm(horizon_reprs, w) + b # [bz, horizon, 1]
+        # pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
+        
+        
         if plot_weights:
             visualized_w += pl_model.learned_w.abs().sum(0).detach().cpu().numpy()
         preds.append(pred.detach().cpu())
