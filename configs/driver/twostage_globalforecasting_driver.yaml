@@ -1,0 +1,32 @@
+
+# @package _global_
+# first line means that this config is for global use, e.g., configs.logger instead of configs.driver.logger
+_recursive_: false # recursive instantiation while using hydra.util.instantiate. 
+#https://hydra.cc/docs/advanced/instantiate_objects/overview/#recursive-instantiation 
+
+defaults:
+  - driver_default
+  - /trainer: trainer_default 
+  - /callbacks: callbacks_default
+
+driver:
+  _target_: hydra.utils.get_method
+  path: src.driver.drivers.darts_twostage_globalforecasting_driver_run
+
+model:
+  sequence_config:
+    batch_size: ${batch_size}
+    epochs: ${epochs}
+    lr: ${lr}
+    model:
+      seq_len: 12
+      # _target_: src.model.lstm.LSTM
+      # input_size: 1
+      # hidden_size: 64
+      # num_layers: 2
+      # dropout: 0.2
+      # bidirectional: true
+      # batch_first: true
+      # output_size: 1
+      # device: cuda
+      # _recursive_: false

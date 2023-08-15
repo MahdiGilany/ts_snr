@@ -9,7 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-from typing import List, Optional, Union, Dict, Literal
+from typing import List, Optional, Union, Dict, Literal, Tuple
 import plotly.express as px
 
 import wandb
@@ -390,6 +390,220 @@ def eval_model(
             wandb_log_bases(model.model, input_chunk_length, output_chunk_length)
                 
     return results, list_backtest_series  
+
+
+# evaluation for enhanced deeptime model with sequence model
+def historical_forecasts_with_seq_manual(
+    model: TorchForecastingModel,
+    test_series: TimeSeries,
+    input_chunk_length: int,
+    output_chunk_length: int,
+    plot_weights: bool = False,
+    ):
+    
+    from torch.utils.data import DataLoader
+    
+    # manually build test dataset and dataloader
+    # test_ds = model._build_train_dataset(test_series, past_covariates=None, future_covariates=None, max_samples_per_ts=None)
+    test_ds = PastCovariatesSequentialDataset(
+        test_series,
+        input_chunk_length=input_chunk_length,
+        output_chunk_length=output_chunk_length,
+        covariates=None,
+        use_static_covariates=False
+        )
+    test_dl = DataLoader(
+        test_ds,
+        batch_size=model.batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        drop_last=False,
+        collate_fn=model._batch_collate_fn,
+        )
+
+    assert model.model is not None, "model.model not found, please load the model using model.load_from_checkpoint()\
+        or model.load_weights_from_checkpoint() which initializes model.model"
+    
+    pl_model = model.model
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    pl_model = pl_model.to(device) 
+    pl_model.eval()
+    
+    preds = []
+    targets = []
+    
+    # a hack for visualizing bases weights importance for deeptime related models
+    visualized_w = 0
+    
+    # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
+    for batch in tqdm(test_dl, desc="Evaluating on test set"):
+        input_series, _, _, target_series = batch
+        input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        
+        # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        pl_model.y = target_series.to(device=pl_model.device, dtype=pl_model.dtype) # a hack for setting target for twoomp model
+
+        # forward pass
+        pred = pl_model((input_series, _))
+        
+        # # temporary pred for checking if memory view works
+        # from einops import repeat
+        # batch_size = input_series.shape[0]
+        # coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(input_series.device)
+        # time_reprs = repeat(pl_model.inr(coords), '1 t d -> b t d', b=batch_size)
+        # horizon_reprs = time_reprs[:, -output_chunk_length:] # [bz, horizon, 256]
+        # w, b = pl_model.adaptive_weights(horizon_reprs, pl_model.y) # [bz, 256, 1], [bz, 1, 1]
+        # pl_model.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        # pred = torch.bmm(horizon_reprs, w) + b # [bz, horizon, 1]
+        # pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
+        
+        
+        if plot_weights:
+            visualized_w += pl_model.learned_w.abs().sum(0).detach().cpu().numpy()
+        preds.append(pred.detach().cpu())
+        targets.append(target_series.detach().cpu())
+    
+    # preparing torch predictions and targets (not darts.timeseries predictions) 
+    preds = torch.cat(preds, dim=0)
+    preds = preds.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
+    targets = torch.cat(targets, dim=0)
+    targets = targets.flip(dims=[0]) # flip back since dataset get item is designed in reverse order
+    
+    # visualize bases weights importance
+    if plot_weights:
+        plt.figure()
+        plt.plot(range(len(visualized_w)), visualized_w)
+        wandb.log({"Plots/weights_importance": plt})
+    
+    # turn into TimeSeries
+    list_backtest_series = []
+    for i in tqdm(range(preds.shape[0]), desc="Turn predictions into timeseries"):
+        backtest_series = TimeSeries.from_times_and_values(
+            test_series.time_index[input_chunk_length+i:input_chunk_length+i+output_chunk_length],
+            preds[i,...].detach().cpu().numpy(),
+            freq=test_series.freq,
+            columns=test_series.components
+            )
+        list_backtest_series.append(backtest_series)
+    return list_backtest_series, preds.squeeze(-1).numpy(), targets.numpy()
+  
+
+def eval_twostage_model(
+    model: TorchForecastingModel,
+    seq_model: nn.Module,
+    configs: DictConfig,
+    data_series: DataSeries,
+    lookback_horizon_codes: Tuple(np.ndarray, np.ndarray),
+    logging: bool = True,
+    forecasting_type: Literal['global', 'local'] = 'global',
+    ) -> Union[Dict, DataSeries]:
+    """Metrics are found based on the validation series on historical forcasts of 
+    the model (using validation to predict future values, read darts documentation).
+    The results are reported based on the scaled series and unscaled series.
+
+    Args:
+        model (TorchForecastingModel): _description_
+        configs (DictConfig): _description_
+        train_series (TimeSeries): _description_
+        val_series (TimeSeries): _description_
+        scaler (Optional[List], optional): _description_. Defaults to None.
+        log (bool, optional): _description_. Defaults to True.
+
+    Returns:
+        Union[Dict, TimeSeries]: _description_
+    """
+        
+    # input and output chunk length
+    input_chunk_length = configs.model.input_chunk_length
+    output_chunk_length = configs.model.output_chunk_length
+    
+    
+    # get series from data_series
+    train_series = data_series.train_series
+    val_series = data_series.val_series
+    test_series = data_series.test_series
+    test_series_noisy = data_series.test_series_noisy
+    scaler = data_series.scaler
+    
+    # get historical forecasts
+    components = test_series.components
+    test_series_backtest = test_series if test_series_noisy is None else test_series_noisy # test series for backtest should be noisy if available
+    
+    num_trimmed_train_val = max(len(test_series_backtest),input_chunk_length)
+    train_val_series_trimmed = concatenate([train_series, val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
+    train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest]) # use a lookback of val for testing
+    log.info("Backtesting the model without retraining (testing on test series)")
+    list_backtest_series, test_preds, test_targets = historical_forecasts_with_seq_manual(
+            model=model,
+            test_series=train_val_test_series_trimmed,
+            input_chunk_length=input_chunk_length,
+            output_chunk_length=output_chunk_length,
+            plot_weights=True if (("deeptime" in configs.model.model_name.lower()) and logging) else False,
+            )
+    
+    
+    # unnormalize series
+    train_val_unscaled_series_trimmed = scaler.inverse_transform(train_val_series_trimmed) if scaler else train_val_series_trimmed
+    test_unscaled_series = scaler.inverse_transform(test_series) if scaler else test_series
+    list_backtest_unscaled_series = [scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if scaler else list_backtest_series
+    
+    
+    # calculating results for Target components only, if available (for crypto dataset)
+    target_indices = np.array(['Target' in component for component in test_series_backtest.components])
+    if target_indices.any():
+        components = list(test_series.components[target_indices])
+        test_series = test_series[components] 
+        test_series_backtest = test_series_backtest[components]
+        test_unscaled_series = test_unscaled_series[components]
+        list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
+        list_backtest_unscaled_series = [backtest_series[components] for backtest_series in list_backtest_unscaled_series]
+    
+    
+    # calculate metrics    
+    predictions = np.stack([series._xa.values for series in list_backtest_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
+    predictions_unscaled = np.stack([series._xa.values for series in list_backtest_unscaled_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
+    log.info("Calculating metrics for backtesting")
+    results = calculate_metrics(
+        true=sliding_window(test_series, output_chunk_length),
+        pred=predictions
+        )
+
+    if test_series_noisy is not None:
+        log.info("Calculating metrics for backtesting using noisy test")
+        results_noisy = calculate_metrics(
+            true=sliding_window(test_series_backtest, output_chunk_length),
+            pred=predictions
+            )
+
+    log.info("Calculating metrics for unnormalized backtesting")
+    results_unscaled = calculate_metrics(
+        true=sliding_window(test_unscaled_series, output_chunk_length),
+        pred=predictions_unscaled
+        )
+    
+
+    # log best    
+    if logging:
+        wandb_log_results_and_plots(
+            results=results,
+            results_noisy=results_noisy,
+            results_unscaled=results_unscaled,
+            components=components,
+            test_series=test_series,
+            test_series_backtest=test_series_backtest,
+            test_unscaled_series=test_unscaled_series,
+            list_backtest_series=list_backtest_series,
+            list_backtest_unscaled_series=list_backtest_unscaled_series,
+            train_val_series_trimmed=train_val_series_trimmed,
+            train_val_unscaled_series_trimmed=train_val_unscaled_series_trimmed,
+            output_chunk_length=output_chunk_length,
+            )
+        if "deeptime" in configs.model.model_name.lower():
+            wandb_log_bases(model.model, input_chunk_length, output_chunk_length)
+                
+    return results, list_backtest_series  
+
 
 
 
