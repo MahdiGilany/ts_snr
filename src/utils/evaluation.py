@@ -399,10 +399,13 @@ def seq_sliding_window(
     window_size: int,
 ):
     seq_data_length = len(seq_data)
-    return np.array([
+    return torch.stack(
+        [
         seq_data[i:i+window_size]
         for i in range(seq_data_length-window_size+1)
-        ])
+        ],
+        dim=0
+        )
     
 
 # evaluation for enhanced deeptime model with sequence model
