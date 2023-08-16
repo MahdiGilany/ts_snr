@@ -4,7 +4,7 @@ defaults:
   - exp_default
   - override /driver@driver: twostage_globalforecasting_driver
   
-name: twostage_deeptime_exchange_layersz256
+name: twostage_deeptime_exchange_layersz256_memsz8
 epochs: 100
 batch_size: 256
 seed: 0
@@ -30,6 +30,7 @@ model:
   # omp_tolerance: 0.001
   # n_nonzero_coefs: 45
   layer_size: 256
+  memory_size: 8
 
 # callbacks:
 #   model_checkpoint:
@@ -38,8 +39,8 @@ model:
   #   patience: 50
 
 new_dir: False
-resume_run: True
-train_stage2: True
+# resume_run: True
+# train_stage2: True
 
 # logger: null
 
