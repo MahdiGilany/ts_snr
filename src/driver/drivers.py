@@ -426,14 +426,19 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
     log.info("Training stage 2 sequence model")
     from src.utils.training import manual_train_seq_model
     sequence_model = manual_train_seq_model(
-        seq_config=configs.model.sequence_model,
+        seq_config=configs.model.sequence_config,
         seq_model=sequence_model,
         train_data=(train_WLs, train_WHs),
         val_data=(val_WLs, val_WHs),
         wandb_log=configs.logger!=None,
         
     )    
-    # sequence_model.eval()
+    
+    seq_len = configs.model.sequence_config.model.seq_len
+    train_val_lookback_codes = np.concatenate([train_WLs, val_WLs], axis=0)[-seq_len:]
+    
+    # free memory    
+    del train_WLs, train_WHs, val_WLs, val_WHs
     
     # eval model
     log.info("Evaluating model")
@@ -441,7 +446,7 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
     results, data_series = eval_twostage_model(
         model=model, 
         seq_model=sequence_model,
-        lookback_horizon_codes=(np.concatenate([train_WLs, val_WLs], axis=0), np.concatenate([train_WHs, val_WHs], axis=0)),
+        train_val_lookback_codes=train_val_lookback_codes,
         configs=configs, 
         data_series=data_series,
         logging=configs.logger!=None,

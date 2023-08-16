@@ -17,7 +17,8 @@ model:
   sequence_config:
     batch_size: ${batch_size}
     epochs: ${epochs}
-    lr: ${lr}
+    lr: ${model.optimizer_kwargs.lr}
+    patience: ${callbacks.early_stopping.patience}
     model:
       seq_len: 12
       # _target_: src.model.lstm.LSTM
