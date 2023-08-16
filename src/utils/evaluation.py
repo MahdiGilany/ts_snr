@@ -392,10 +392,24 @@ def eval_model(
     return results, list_backtest_series  
 
 
+def seq_sliding_window(
+    seq_data: torch.Tensor,
+    window_size: int,
+):
+    seq_data_length = len(seq_data)
+    return np.array([
+        seq_data[i:i+window_size]
+        for i in range(seq_data_length-window_size+1)
+        ])
+    
+
 # evaluation for enhanced deeptime model with sequence model
 def historical_forecasts_with_seq_manual(
     model: TorchForecastingModel,
+    seq_model: nn.Module,
     test_series: TimeSeries,
+    train_val_lookback_codes: np.ndarray,
+    seq_len: int,
     input_chunk_length: int,
     output_chunk_length: int,
     plot_weights: bool = False,
@@ -427,8 +441,12 @@ def historical_forecasts_with_seq_manual(
     
     pl_model = model.model
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    
     pl_model = pl_model.to(device) 
+    seq_model = seq_model.to(device)
+    
     pl_model.eval()
+    seq_model.eval()
     
     preds = []
     targets = []
@@ -436,31 +454,44 @@ def historical_forecasts_with_seq_manual(
     # a hack for visualizing bases weights importance for deeptime related models
     visualized_w = 0
     
+    from einops import repeat
+    batch_size = input_series.shape[0]
+    coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(device)
+    time_reprs = repeat(pl_model.inr(coords), '1 t d -> b t d', b=batch_size)
+    
+    seq_WL = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device)[1:, ...] # [seq_len-1, layer_size + 1 (#codes), 1 or output_dim]
+    seq_WL = seq_WL[::-1, ...] # fliping 
+    
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
     for batch in tqdm(test_dl, desc="Evaluating on test set"):
         input_series, _, _, target_series = batch
         input_series = input_series.to(device=pl_model.device, dtype=pl_model.dtype)
+        target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         
         # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         pl_model.y = target_series.to(device=pl_model.device, dtype=pl_model.dtype) # a hack for setting target for twoomp model
 
         # forward pass
-        pred = pl_model((input_series, _))
+        # pred = pl_model((input_series, _))
         
-        # # temporary pred for checking if memory view works
-        # from einops import repeat
-        # batch_size = input_series.shape[0]
-        # coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(input_series.device)
-        # time_reprs = repeat(pl_model.inr(coords), '1 t d -> b t d', b=batch_size)
-        # horizon_reprs = time_reprs[:, -output_chunk_length:] # [bz, horizon, 256]
-        # w, b = pl_model.adaptive_weights(horizon_reprs, pl_model.y) # [bz, 256, 1], [bz, 1, 1]
-        # pl_model.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
-        # pred = torch.bmm(horizon_reprs, w) + b # [bz, horizon, 1]
-        # pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
+        # look back and horizon dictionaries        
+        lookback_reprs = time_reprs[:, :-output_chunk_length] # shape = (batch_size, horizon, layer_size)
+        horizon_reprs = time_reprs[:, -output_chunk_length:]
+        
+        w, b = pl_model.adaptive_weights(lookback_reprs, input_series) # [bz, 256, 1], [bz, 1, 1]
+        W_L = torch.cat([w, b], dim=1) # shape = (batch_size, layer_size + 1, 1)
+        
+        # predicting WH using seq model
+        seq_WL = torch.cat([W_L, seq_WL], dim=0)[::-1,...] # shape = (seq_len + batch_size - 1, layer_size + 1, 1)
+        sliding_window_seq_WL =  seq_sliding_window(seq_data=seq_WL, window_size=seq_len) # shape = (batch_size, seq_len, layer_size + 1, 1)
+        predicted_WH = seq_model(sliding_window_seq_WL)[::-1,...] # shape = (batch_size, layer_size + 1, 1)
+        
+        pred = torch.bmm(horizon_reprs, predicted_WH[:-1]) + predicted_WH[-1:] # [bz, horizon, 1]
+        pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
         
         
         if plot_weights:
-            visualized_w += pl_model.learned_w.abs().sum(0).detach().cpu().numpy()
+            visualized_w += predicted_WH.abs().sum(0).detach().cpu().numpy()
         preds.append(pred.detach().cpu())
         targets.append(target_series.detach().cpu())
     
@@ -494,7 +525,7 @@ def eval_twostage_model(
     seq_model: nn.Module,
     configs: DictConfig,
     data_series: DataSeries,
-    lookback_horizon_codes: Tuple(np.ndarray, np.ndarray),
+    train_val_lookback_codes: Tuple(np.ndarray, np.ndarray),
     logging: bool = True,
     forecasting_type: Literal['global', 'local'] = 'global',
     ) -> Union[Dict, DataSeries]:
@@ -533,10 +564,18 @@ def eval_twostage_model(
     num_trimmed_train_val = max(len(test_series_backtest),input_chunk_length)
     train_val_series_trimmed = concatenate([train_series, val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
     train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-input_chunk_length:], test_series_backtest]) # use a lookback of val for testing
+    
+    # lookback codes from validation series (to be able to have prediction from the first step of test series)
+    seq_len = configs.model.sequence_config.model.seq_len
+    train_val_lookback_codes = train_val_lookback_codes[-seq_len:, ...]
+    
     log.info("Backtesting the model without retraining (testing on test series)")
     list_backtest_series, test_preds, test_targets = historical_forecasts_with_seq_manual(
             model=model,
+            seq_model=seq_model,
             test_series=train_val_test_series_trimmed,
+            train_val_lookback_codes=train_val_lookback_codes,
+            seq_len=seq_len,
             input_chunk_length=input_chunk_length,
             output_chunk_length=output_chunk_length,
             plot_weights=True if (("deeptime" in configs.model.model_name.lower()) and logging) else False,
