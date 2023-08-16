@@ -424,7 +424,7 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
     
     # instantiate sequence model
     log.info("Instantiating sequence model")
-    sequence_model = instantiate(configs.model.sequence_model) 
+    sequence_model = instantiate(configs.model.sequence_config.model) 
     
     # manually train sequence model
     log.info("Training stage 2 sequence model")

@@ -45,6 +45,7 @@ save_checkpoints: True
 
 new_dir: False # if True, creates a new directory for this run with the same experiment name
 resume_run: False # if True, resumes the latest run with the same experiment name
+train_stage2: True
 
 resume_id: ${oc.env:RESUME_ID,null} # if you set RUN_ID it may be used to resume previous runs
 id: 0 # unique id for this run

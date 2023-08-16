@@ -14,7 +14,8 @@ class SimpleLSTM(nn.Module):
         output_dim=256,
         hidden_dim=1024,
         num_layers=2,
-        dropout=0.5
+        dropout=0.5,
+        model_name="simple_lstm",
         ):
         super(SimpleLSTM, self).__init__()
         self.seq_len = seq_len
@@ -23,9 +24,11 @@ class SimpleLSTM(nn.Module):
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
+        self.model_name = model_name
         self.lstm = nn.LSTM(input_dim+1, hidden_dim, num_layers, proj_size=output_dim+1, dropout=dropout, batch_first=True)
 
     def forward(self, X):
         assert X.shape[-1]==1, "X should be univariate for now"
         # X.shape # (batch_size, seq_len, input_dim, 1)
-        return self.lstm(X.squeeze(-1))[:, -1, :].unsqueeze(-1) # before indexing (batch_size, seq_len, output_dim) -> after (batch_size, output_dim, 1)
+        out, _ = self.lstm(X.squeeze(-1))
+        return out.unsqueeze(-1) # (batch_size, seq_len, output_dim, 1)

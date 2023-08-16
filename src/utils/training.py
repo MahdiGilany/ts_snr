@@ -131,7 +131,7 @@ def get_lookback_horizon_codes(
     W_Ls = W_Ls[::-1, ...]
     W_Hs = W_Hs[::-1, ...]
     
-    return W_Ls, W_Hs
+    return W_Ls.copy(), W_Hs.copy()
   
 def manual_train_seq_model(
     seq_config: DictConfig,
@@ -141,8 +141,13 @@ def manual_train_seq_model(
     wandb_log: bool = False,
 ):
     # create a dataset and data loader
-    train_ds = SequeceDataset(torch.tensor(train_data[0]), torch.tensor(train_data[1]), seq_len=seq_config.model.seq_len)
-    val_ds = SequeceDataset(torch.tensor(val_data[0]), torch.tensor(val_data[1]), seq_len=seq_config.model.seq_len)
+    train_x = torch.tensor(train_data[0])
+    train_y = torch.tensor(train_data[1])
+    val_x = torch.tensor(val_data[0])
+    val_y = torch.tensor(val_data[1])
+    
+    train_ds = SequeceDataset(train_x, train_y, seq_len=seq_config.model.seq_len)
+    val_ds = SequeceDataset(val_x, val_y, seq_len=seq_config.model.seq_len)
     
     train_dl = DataLoader(
             train_ds,
@@ -163,7 +168,7 @@ def manual_train_seq_model(
     
     # train the model
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    seq_model.to(device)
+    seq_model.to(device=device, dtype=train_x.dtype)
     seq_model.train()
     
     optimizer = torch.optim.Adam(seq_model.parameters(), lr=seq_config.lr)
@@ -171,15 +176,15 @@ def manual_train_seq_model(
     
     best_val_loss = np.inf
     early_stop_counter = 0
-    for epoch in range(seq_config.epochs):
+    for epoch in tqdm(range(seq_config.epochs), desc="Training sequence model"):
         # training
-        for batch in tqdm(train_dl, desc="Training sequence model"):
+        for batch in train_dl:
             seq_model.zero_grad()
             seq_data, seq_label = batch
             seq_data = seq_data.to(device)
             seq_label = seq_label.to(device)
             seq_pred = seq_model(seq_data)
-            loss = criterion(seq_pred, seq_label)
+            loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
             loss.backward()
             optimizer.step()
             if wandb_log:
@@ -189,24 +194,25 @@ def manual_train_seq_model(
         seq_model.eval()
         losses = []
         with torch.no_grad():
-            for batch in tqdm(val_dl, desc="Validation sequence model"):
+            for batch in val_dl:
                 seq_data, seq_label = batch
                 seq_data = seq_data.to(device)
                 seq_label = seq_label.to(device)
                 seq_pred = seq_model(seq_data)
-                loss = criterion(seq_pred, seq_label)
+                loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
                 losses.append(loss.item())
+                early_stop_counter += 1
                 if wandb_log:
                     wandb.log({"Seq/val_loss": loss.item()})
             if np.mean(losses) < best_val_loss:
-                early_stop_counter += 1
+                early_stop_counter = 0
                 best_val_loss = loss.item()
-                torch.save(seq_model, f"./seq_model/{seq_config.model.model_name}.pt")
+                torch.save(seq_model, f"./{seq_model.model_name}.pt")
             if early_stop_counter > seq_config.patience:
                 log.info("Early stopping")
-                return torch.load(f"./seq_model/{seq_config.model.model_name}.pt")
+                return torch.load(f"./{seq_model.model_name}.pt")
         seq_model.train()
         
-    return torch.load(f"./seq_model/{seq_config.model.model_name}.pt")
+    return torch.load(f"./{seq_model.model_name}.pt")
         
   

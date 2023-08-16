@@ -461,7 +461,7 @@ def historical_forecasts_with_seq_manual(
     single_time_reprs = pl_model.inr(coords)
     
     seq_WL = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device)[1:, ...] # [seq_len-1, layer_size + 1 (#codes), 1 or output_dim]
-    seq_WL = seq_WL[::-1, ...] # fliping 
+    seq_WL = seq_WL.flip(dims=[0]) # fliping 
     
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
     for batch in tqdm(test_dl, desc="Evaluating on test set"):
@@ -487,9 +487,9 @@ def historical_forecasts_with_seq_manual(
         W_L = torch.cat([w, b], dim=1) # shape = (batch_size, layer_size + 1, 1)
         
         # predicting WH using seq model
-        seq_WL = torch.cat([W_L, seq_WL], dim=0)[::-1,...] # shape = (seq_len + batch_size - 1, layer_size + 1, 1)
+        seq_WL = torch.cat([W_L, seq_WL], dim=0).flip(dims=[0])  # shape = (seq_len + batch_size - 1, layer_size + 1, 1)
         sliding_window_seq_WL =  seq_sliding_window(seq_data=seq_WL, window_size=seq_len) # shape = (batch_size, seq_len, layer_size + 1, 1)
-        predicted_WH = seq_model(sliding_window_seq_WL)[::-1,...] # shape = (batch_size, layer_size + 1, 1)
+        predicted_WH = seq_model(sliding_window_seq_WL).flip(dims=[0])  # shape = (batch_size, layer_size + 1, 1)
         
         pred = torch.bmm(horizon_reprs, predicted_WH[:-1]) + predicted_WH[-1:] # [bz, horizon, 1]
         pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
