@@ -11,6 +11,7 @@ import torch.nn as nn
 from torch.optim.lr_scheduler import LambdaLR
 import math
 import wandb
+from omegaconf import DictConfig
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
@@ -188,6 +189,7 @@ class TwoStageDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        sequence_config: DictConfig = None,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))

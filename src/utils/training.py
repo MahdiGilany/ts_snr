@@ -37,7 +37,7 @@ class SequeceDataset(Dataset):
     def __init__(
         self, 
         seq_data: torch.tensor, 
-        seq_label: Optional(torch.tensor) = None,
+        seq_label: Optional[torch.tensor] = None,
         seq_len: int = 24,
         ) -> None:
         super().__init__()
@@ -130,8 +130,8 @@ def get_lookback_horizon_codes(
 def manual_train_seq_model(
     seq_config: DictConfig,
     seq_model: nn.Module,
-    train_data: Tuple(np.array, np.array),
-    val_data: Tuple(np.array, np.array),
+    train_data: Tuple[np.array, np.array],
+    val_data: Tuple[np.array, np.array],
     wandb_log: bool = False,
 ):
     # create a dataset and data loader

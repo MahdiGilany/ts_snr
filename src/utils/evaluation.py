@@ -525,7 +525,7 @@ def eval_twostage_model(
     seq_model: nn.Module,
     configs: DictConfig,
     data_series: DataSeries,
-    train_val_lookback_codes: Tuple(np.ndarray, np.ndarray),
+    train_val_lookback_codes: Tuple[np.ndarray, np.ndarray],
     logging: bool = True,
     forecasting_type: Literal['global', 'local'] = 'global',
     ) -> Union[Dict, DataSeries]:
