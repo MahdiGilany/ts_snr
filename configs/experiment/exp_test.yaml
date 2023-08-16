@@ -2,8 +2,9 @@
 
 defaults:
   - exp_default
+  - override driver: twostage_globalforecasting_driver
   
-name: memory_view_deeptime_etth2_layersz256
+name: twostage_deeptime_exchange_layersz256
 epochs: 100
 batch_size: 256
 seed: 0
@@ -15,16 +16,16 @@ trainer:
   # gradient_clip_val: 10.0
 
 data:
-  dataset_name: etth2
+  dataset_name: exchange_rate
   # split_ratio: [0.15, 0.05, 0.05]
   noise_std: 0. # 0.1
-  target_series_index: -1
+  target_series_index: -2
   # prct_rows_to_load: .1
 
 model:
   model_name: deeptime
   output_chunk_length: 96
-  input_chunk_length: 672
+  input_chunk_length: 288
   # K: 256
   # omp_tolerance: 0.001
   # n_nonzero_coefs: 45
