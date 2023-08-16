@@ -2,7 +2,7 @@
 
 defaults:
   - exp_default
-  - override driver: twostage_globalforecasting_driver
+  - override /driver@driver: twostage_globalforecasting_driver
   
 name: twostage_deeptime_exchange_layersz256
 epochs: 100
@@ -23,13 +23,13 @@ data:
   # prct_rows_to_load: .1
 
 model:
-  model_name: deeptime
+  model_name: twostage_deeptime
   output_chunk_length: 96
   input_chunk_length: 288
   # K: 256
   # omp_tolerance: 0.001
   # n_nonzero_coefs: 45
-  # layer_size: 256
+  layer_size: 256
 
 # callbacks:
 #   model_checkpoint:
@@ -38,8 +38,8 @@ model:
   #   patience: 50
 
 new_dir: False
-# train_stage1: False
+resume_run: True
+train_stage2: True
 
 # logger: null
 
-verbose: True
