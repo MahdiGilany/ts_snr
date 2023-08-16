@@ -21,7 +21,7 @@ model:
     patience: ${callbacks.early_stopping.patience}
     model:
       _target_: src.modeling.modules.lstm.SimpleLSTM
-      seq_len: 12
+      seq_len: 1
       input_dim: ${model.memory_size}
       output_dim: ${model.memory_size}
       hidden_dim: 1024

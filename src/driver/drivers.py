@@ -436,7 +436,6 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
             train_data=(train_WLs, train_WHs),
             val_data=(val_WLs, val_WHs),
             wandb_log=configs.logger!=None,
-            
         )    
     else:
         log.info("Loading stage 2 sequence model")

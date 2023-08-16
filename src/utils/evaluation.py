@@ -494,7 +494,7 @@ def historical_forecasts_with_seq_manual(
         sliding_window_seq_WL =  seq_sliding_window(seq_data=seq_WL, window_size=seq_len) # shape = (batch_size, seq_len, layer_size + 1, 1) # order forward in time
         
         # reset seq_WL
-        seq_WL = seq_WL[-seq_len+1:, ...].flip(dims=[0]) # shape = (seq_len -1, layer_size + 1, 1) # order backward in time
+        seq_WL = seq_WL[-seq_len:, ...][1:,...].flip(dims=[0]) # shape = (seq_len -1, layer_size + 1, 1) # order backward in time
         
         # prediction
         predicted_WH = seq_model(sliding_window_seq_WL).flip(dims=[0])[:,-1,...]  # shape = (batch_size, layer_size + 1, 1) # order backward in time
