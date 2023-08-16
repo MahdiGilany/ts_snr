@@ -119,7 +119,7 @@ def get_lookback_horizon_codes(
         W_Hs.append(W_H.detach().cpu().numpy())
 
     # concatenate all batches
-    W_Ls = np.concatenate(W_Ls, axis=0)
+    W_Ls = np.concatenate(W_Ls, axis=0) # shape = (num_samples, layer_size + 1, 1)
     W_Hs = np.concatenate(W_Hs, axis=0)
     
     # flip back since dataset get item is designed in reverse order
