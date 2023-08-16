@@ -205,7 +205,7 @@ def manual_train_seq_model(
                 losses.append(loss.item())
                 early_stop_counter += 1
             if wandb_log:
-                wandb.log({"Seq/val_loss_last_seq": np.mean(losses)})
+                wandb.log({"Seq/val_loss": np.mean(losses)})
             if np.mean(losses) < best_val_loss:
                 early_stop_counter = 0
                 best_val_loss = loss.item()
