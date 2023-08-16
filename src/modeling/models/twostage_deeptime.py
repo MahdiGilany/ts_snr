@@ -14,7 +14,7 @@ import wandb
 from omegaconf import DictConfig
 
 from einops import rearrange, repeat, reduce
-from ..modules.inr import INR
+from ..modules.inr import INR, MemoryINR
 from ..modules.regressors import RidgeRegressor, RidgeRegressorTrimmed
 
 from darts.logging import get_logger, raise_if_not, raise_log
@@ -33,6 +33,7 @@ class _TwoStageDeepTIMeModule(PLPastCovariatesModule):
         forecast_horizon_length: int = 12,
         datetime_feats: int = 0,
         layer_size: int = 256,
+        memory_size: int = 16,
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
@@ -41,7 +42,7 @@ class _TwoStageDeepTIMeModule(PLPastCovariatesModule):
         **kwargs,
         ):
         super().__init__(**kwargs)
-        self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
+        self.inr = MemoryINR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size, memory_size=memory_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.adaptive_weights = RidgeRegressor()
         # self.adaptive_weights = RidgeRegressorTrimmed(no_remained_after_trim=3)
@@ -186,6 +187,7 @@ class TwoStageDeepTIMeModel(PastCovariatesTorchModel):
         output_chunk_length: int,
         datetime_feats: int = 0,
         layer_size: int = 256,
+        memory_size: int = 16,
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
@@ -201,6 +203,7 @@ class TwoStageDeepTIMeModel(PastCovariatesTorchModel):
         self.datetime_feats = datetime_feats
         self.inr_layers = inr_layers
         self.layer_size = layer_size
+        self.memory_size = memory_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
         
@@ -226,6 +229,7 @@ class TwoStageDeepTIMeModel(PastCovariatesTorchModel):
             forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,
+            memory_size=self.memory_size,
             inr_layers=self.inr_layers,
             n_fourier_feats=self.n_fourier_feats,
             scales=self.scales,

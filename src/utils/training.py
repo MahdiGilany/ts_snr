@@ -171,13 +171,14 @@ def manual_train_seq_model(
     seq_model.to(device=device, dtype=train_x.dtype)
     seq_model.train()
     
-    optimizer = torch.optim.Adam(seq_model.parameters(), lr=seq_config.lr)
+    optimizer = torch.optim.AdamW(seq_model.parameters(), lr=seq_config.lr)
     criterion = nn.MSELoss()
     
     best_val_loss = np.inf
     early_stop_counter = 0
     for epoch in tqdm(range(seq_config.epochs), desc="Training sequence model"):
         # training
+        losses = []
         for batch in train_dl:
             seq_model.zero_grad()
             seq_data, seq_label = batch
@@ -185,10 +186,11 @@ def manual_train_seq_model(
             seq_label = seq_label.to(device)
             seq_pred = seq_model(seq_data)
             loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
+            losses.append(loss.item())
             loss.backward()
             optimizer.step()
-            if wandb_log:
-                wandb.log({"Seq/train_loss": loss.item(), "Seq/epoch": epoch})
+        if wandb_log:
+            wandb.log({"Seq/train_loss": np.mean(losses), "Seq/epoch": epoch})
         
         # validation
         seq_model.eval()
@@ -202,8 +204,8 @@ def manual_train_seq_model(
                 loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
                 losses.append(loss.item())
                 early_stop_counter += 1
-                if wandb_log:
-                    wandb.log({"Seq/val_loss": loss.item()})
+            if wandb_log:
+                wandb.log({"Seq/val_loss_last_seq": np.mean(losses)})
             if np.mean(losses) < best_val_loss:
                 early_stop_counter = 0
                 best_val_loss = loss.item()

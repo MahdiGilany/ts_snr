@@ -48,3 +48,21 @@ class INR(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         x = self.features(x)
         return self.layers(x)
+    
+    
+class MemoryINR(nn.Module):
+    def __init__(self, in_feats: int, layers: int, layer_size: int, memory_size: int, n_fourier_feats: int, scales: float,
+                 dropout: Optional[float] = 0.1):
+        super().__init__()
+        self.features = nn.Linear(in_feats, layer_size) if n_fourier_feats == 0 \
+            else GaussianFourierFeatureTransform(in_feats, n_fourier_feats, scales)
+        in_size = layer_size if n_fourier_feats == 0 \
+            else n_fourier_feats
+        layers = [INRLayer(in_size, layer_size, dropout=dropout)] + \
+                 [INRLayer(layer_size, layer_size, dropout=dropout) for _ in range(layers - 2)] + \
+                 [INRLayer(layer_size, memory_size, dropout=dropout)]
+        self.layers = nn.Sequential(*layers)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.features(x)
+        return self.layers(x)

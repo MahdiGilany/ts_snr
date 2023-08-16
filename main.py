@@ -30,12 +30,18 @@ def maybe_resume_previous_run(config):
     if config.resume_run:
         logging.info("Experiment is set up with auto-resume")
         if os.path.exists("config.yaml"):
+            try: 
+                sequence_config = config.model.sequence_config
+            except:
+                sequence_config = None
+                
             train_stage2 = config.train_stage2
             logging.info("Found config for previous experiment")
             config = OmegaConf.load("config.yaml")
             config.new_dir = False
             config.resume_run = True
             config.train_stage2 = train_stage2
+            config.model.sequence_config = sequence_config
         else:
             logging.info("No config found. Starting from scratch.")
             conf = OmegaConf.to_yaml(config, resolve=True)
