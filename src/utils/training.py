@@ -12,6 +12,8 @@ import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from typing import List, Optional, Union, Dict, Literal, Tuple
 import plotly.express as px
+from einops import repeat
+
 
 import wandb
 from omegaconf import DictConfig, OmegaConf
@@ -57,6 +59,7 @@ def get_lookback_horizon_codes(
    time_series: TimeSeries,
    input_chunk_length: int,
    output_chunk_length: int,
+   batch_size: int,
 ): 
     
     series_ds = PastCovariatesSequentialDataset(
@@ -86,11 +89,9 @@ def get_lookback_horizon_codes(
     pl_deeptime_model = pl_deeptime_model.to(device) 
     pl_deeptime_model.eval()
     
-    # fixed time representations as memory blocks
-    from einops import repeat
-    batch_size = input_series.shape[0]
+    # time representation is took out of for loop for faster computation (time reprs as memory block)
     coords = pl_deeptime_model.get_coords(input_chunk_length, output_chunk_length).to(device)
-    time_reprs = repeat(pl_deeptime_model.inr(coords), '1 t d -> b t d', b=batch_size)
+    single_time_reprs = pl_deeptime_model.inr(coords)
     
     # list of signal and label codes
     W_Ls = []
@@ -102,6 +103,10 @@ def get_lookback_horizon_codes(
         
         # # target_series = target_series.to(device=pl_model.device, dtype=pl_model.dtype)
         # pl_deeptime_model.y = target_series.to(device=pl_deeptime_model.device, dtype=pl_deeptime_model.dtype) # a hack for setting target for twoomp model
+        
+        # repeating time reprs for batch size
+        batch_size = input_series.shape[0]
+        time_reprs = repeat(single_time_reprs, '1 t d -> b t d', b=batch_size)
         
         # look back and horizon dictionaries        
         lookback_reprs = time_reprs[:, :-output_chunk_length] # shape = (batch_size, forecast_horizon_length, layer_size)
@@ -126,6 +131,7 @@ def get_lookback_horizon_codes(
     W_Ls = W_Ls[::-1, ...]
     W_Hs = W_Hs[::-1, ...]
     
+    return W_Ls, W_Hs
   
 def manual_train_seq_model(
     seq_config: DictConfig,

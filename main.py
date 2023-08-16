@@ -32,6 +32,8 @@ def maybe_resume_previous_run(config):
         if os.path.exists("config.yaml"):
             logging.info("Found config for previous experiment")
             config = OmegaConf.load("config.yaml")
+            config.new_dir = False
+            config.resume_run = True
         else:
             logging.info("No config found. Starting from scratch.")
             conf = OmegaConf.to_yaml(config, resolve=True)

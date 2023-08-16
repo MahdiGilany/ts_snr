@@ -11,6 +11,8 @@ import torch
 import torch.nn as nn
 from typing import List, Optional, Union, Dict, Literal, Tuple
 import plotly.express as px
+from einops import repeat
+
 
 import wandb
 from omegaconf import DictConfig, OmegaConf
@@ -454,10 +456,9 @@ def historical_forecasts_with_seq_manual(
     # a hack for visualizing bases weights importance for deeptime related models
     visualized_w = 0
     
-    from einops import repeat
-    batch_size = input_series.shape[0]
+    # time representation is took out of for loop for faster computation
     coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(device)
-    time_reprs = repeat(pl_model.inr(coords), '1 t d -> b t d', b=batch_size)
+    single_time_reprs = pl_model.inr(coords)
     
     seq_WL = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device)[1:, ...] # [seq_len-1, layer_size + 1 (#codes), 1 or output_dim]
     seq_WL = seq_WL[::-1, ...] # fliping 
@@ -473,6 +474,10 @@ def historical_forecasts_with_seq_manual(
 
         # forward pass
         # pred = pl_model((input_series, _))
+        
+        # repeating time reprs for batch size
+        batch_size = input_series.shape[0]
+        time_reprs = repeat(single_time_reprs, '1 t d -> b t d', b=batch_size)
         
         # look back and horizon dictionaries        
         lookback_reprs = time_reprs[:, :-output_chunk_length] # shape = (batch_size, horizon, layer_size)

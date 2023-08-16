@@ -377,17 +377,19 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
     metrics = MetricCollection([mape, mse, mae])
     
     
-    # instantiate darts model 
-    log.info(f"Instantiating model <{configs.model._target_}>")
-    model: TorchForecastingModel = instantiate(
-        configs.model,
-        pl_trainer_kwargs=pl_trainer_kwargs,
-        torch_metrics=metrics,
-        save_checkpoints=configs.save_checkpoints,
-        work_dir=os.path.join(os.getcwd(), DEFAULT_DARTS_FOLDER), # this avoids saving darts_logs anywhere else
-        )
+    if not configs.resume_run:
+        # instantiate darts model 
+        log.info(f"Instantiating model <{configs.model._target_}>")
+        model: TorchForecastingModel = instantiate(
+            configs.model,
+            pl_trainer_kwargs=pl_trainer_kwargs,
+            torch_metrics=metrics,
+            save_checkpoints=configs.save_checkpoints,
+            work_dir=os.path.join(os.getcwd(), DEFAULT_DARTS_FOLDER), # this avoids saving darts_logs anywhere else
+            # force_reset=True,
+            )
     
-    if configs.train_stage1:
+    
         # train model
         log.info("Training stage 1 model")
         model.fit(
@@ -399,7 +401,7 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
             ) # trainer
     
     # loading best model
-    model = model.load_from_checkpoint(model_name=configs.model.model_name, best=True) # TODO: needs work if not using wandb or not after training
+    model = TorchForecastingModel.load_from_checkpoint(model_name=configs.model.model_name, best=True) # TODO: needs work if not using wandb or not after training
 
     # getting lookback and horizon codes (w_L and w_H)
     log.info("Get lookback and horizon codes")
@@ -408,14 +410,16 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
         model,
         data_series.train_series,
         configs.model.input_chunk_length,
-        configs.model.output_chunk_length 
+        configs.model.output_chunk_length,
+        batch_size=configs.batch_size,
         ) # (len(train), lookback, out_dim)
     
     val_WLs, val_WHs = get_lookback_horizon_codes(
         model,
         data_series.val_series,
         configs.model.input_chunk_length,
-        configs.model.output_chunk_length 
+        configs.model.output_chunk_length,
+        batch_size=configs.batch_size, 
         ) # (len(val), lookback, out_dim)
     
     # instantiate sequence model
