@@ -18,9 +18,12 @@ class SimpleLSTM(nn.Module):
         model_name="simple_lstm",
         ):
         super(SimpleLSTM, self).__init__()
+        
+        assert input_dim == output_dim, "input_dim and output_dim should be same for now" 
+        
         self.seq_len = seq_len
         self.input_dim = input_dim + 1
-        self.output_dim = output_dim + 1
+        self.output_dim = output_dim + 1        
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.dropout = dropout
@@ -31,4 +34,4 @@ class SimpleLSTM(nn.Module):
         assert X.shape[-1]==1, "X should be univariate for now"
         # X.shape # (batch_size, seq_len, input_dim, 1)
         out, _ = self.lstm(X.squeeze(-1))
-        return out.unsqueeze(-1) # (batch_size, seq_len, output_dim, 1)
+        return out.unsqueeze(-1) + X # (batch_size, seq_len, output_dim, 1)
