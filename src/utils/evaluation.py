@@ -463,9 +463,12 @@ def historical_forecasts_with_seq_manual(
     coords = pl_model.get_coords(input_chunk_length, output_chunk_length).to(device)
     single_time_reprs = pl_model.inr(coords)
     
-    seq_WL = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device)[1:, ...] # [seq_len-1, layer_size + 1 (#codes), 1 or output_dim]
-    seq_WL = seq_WL.flip(dims=[0]) # fliping # order backward in time
+    # seq_WL = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device)[1:, ...] # [seq_len-1, layer_size + 1 (#codes), 1 or output_dim]
+    # seq_WL = seq_WL.flip(dims=[0]) # fliping # order backward in time
     
+    seq_WH = torch.tensor(train_val_lookback_codes, dtype=pl_model.dtype, device=device) # [seq_len + horizon, layer_size + 1 (#codes), 1 or output_dim]
+    seq_WH = seq_WH.flip(dims=[0]) # fliping # order backward in time
+
     # one epoch of evaluation on test set. Note that for last forecast_horizon points in test set, we only have one prediction
     for batch in tqdm(test_dl, desc="Evaluating on test set"):
         input_series, _, _, target_series = batch
@@ -490,14 +493,27 @@ def historical_forecasts_with_seq_manual(
         W_L = torch.cat([w, b], dim=1) # shape = (batch_size, layer_size + 1, 1)
         
         # predicting WH using seq model
-        seq_WL = torch.cat([W_L, seq_WL], dim=0).flip(dims=[0])  # shape = (seq_len + batch_size - 1, layer_size + 1, 1) # order forward in time
-        sliding_window_seq_WL =  seq_sliding_window(seq_data=seq_WL, window_size=seq_len) # shape = (batch_size, seq_len, layer_size + 1, 1) # order forward in time
+        # seq_WL = torch.cat([W_L, seq_WL], dim=0).flip(dims=[0])  # shape = (seq_len + batch_size - 1, layer_size + 1, 1) # order forward in time
+        # sliding_window_seq_WL =  seq_sliding_window(seq_data=seq_WL, window_size=seq_len) # shape = (batch_size, seq_len, layer_size + 1, 1) # order forward in time
         
         # reset seq_WL
-        seq_WL = seq_WL[-seq_len:, ...][1:,...].flip(dims=[0]) # shape = (seq_len -1, layer_size + 1, 1) # order backward in time
+        # seq_WL = seq_WL[-seq_len:, ...][1:,...].flip(dims=[0]) # shape = (seq_len -1, layer_size + 1, 1) # order backward in time
         
         # prediction
-        predicted_WH = seq_model(sliding_window_seq_WL).flip(dims=[0])[:,-1,...]  # shape = (batch_size, layer_size + 1, 1) # order backward in time
+        # predicted_WH = seq_model(sliding_window_seq_WL).flip(dims=[0])[:,-1,...]  # shape = (batch_size, layer_size + 1, 1) # order backward in time
+        # predicted_WH = predicted_WH + W_L 
+        
+        # predicting WH using seq model
+        w, b = pl_model.adaptive_weights(horizon_reprs, target_series) # [bz, 256, 1], [bz, 1, 1]
+        W_H = torch.cat([w, b], dim=1) # shape = (batch_size, layer_size + 1, 1)
+        seq_WH = torch.cat([W_H, seq_WH], dim=0).flip(dims=[0])  # shape = (seq_len + horizon + batch_size , layer_size + 1, 1) # order forward in time
+        sliding_window_seq_WH =  seq_sliding_window(seq_data=seq_WH[:-output_chunk_length,...], window_size=seq_len) # shape = (batch_size + 1, seq_len, layer_size + 1, 1) # order forward in time
+        predicted_WH = seq_model(sliding_window_seq_WH).flip(dims=[0])[:,-1,...]  # shape = (batch_size + 1, layer_size + 1, 1) # order backward in time
+        predicted_WH = predicted_WH[1:, ...] # shape = (batch_size, layer_size + 1, 1) # order backward in time
+        predicted_WH = predicted_WH + W_L 
+        # reset seq_WH
+        seq_WH = seq_WH[-seq_len-output_chunk_length:, ...].flip(dims=[0]) # shape = (seq_len, layer_size + 1, 1) # order backward in time
+
         
         pred = torch.bmm(horizon_reprs, predicted_WH[:, :-1]) + predicted_WH[:, -1:] # [bz, horizon, 1] 
         pred = pred.view(pred.shape[0], output_chunk_length, pred.shape[2], pl_model.nr_params)
@@ -580,7 +596,7 @@ def eval_twostage_model(
     
     # lookback codes from validation series (to be able to have prediction from the first step of test series)
     seq_len = configs.model.sequence_config.model.seq_len
-    train_val_lookback_codes = train_val_lookback_codes[-seq_len:, ...]
+    # train_val_lookback_codes = train_val_lookback_codes[-seq_len:, ...]
     
     log.info("Backtesting the model without retraining (testing on test series)")
     list_backtest_series, test_preds, test_targets = historical_forecasts_with_seq_manual(

@@ -432,6 +432,7 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
         from src.utils.training import manual_train_seq_model
         sequence_model = manual_train_seq_model(
             seq_config=configs.model.sequence_config,
+            output_chunk_length=configs.model.output_chunk_length,
             seq_model=sequence_model,
             train_data=(train_WLs, train_WHs),
             val_data=(val_WLs, val_WHs),
@@ -442,7 +443,7 @@ def darts_twostage_globalforecasting_driver_run(configs: DictConfig):
         sequence_model = torch.load(f"./{configs.model.sequence_config.model.model_name}.pt")
     
     seq_len = configs.model.sequence_config.model.seq_len
-    train_val_lookback_codes = np.concatenate([train_WLs, val_WLs], axis=0)[-seq_len:]
+    train_val_lookback_codes = np.concatenate([train_WHs, val_WHs], axis=0)[-seq_len-configs.model.output_chunk_length:]
     
     # free memory    
     del train_WLs, train_WHs, val_WLs, val_WHs

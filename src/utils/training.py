@@ -135,16 +135,23 @@ def get_lookback_horizon_codes(
   
 def manual_train_seq_model(
     seq_config: DictConfig,
+    output_chunk_length: int,
     seq_model: nn.Module,
     train_data: Tuple[np.array, np.array],
     val_data: Tuple[np.array, np.array],
     wandb_log: bool = False,
 ):
     # create a dataset and data loader
-    train_x = torch.tensor(train_data[0])
-    train_y = torch.tensor(train_data[1])
-    val_x = torch.tensor(val_data[0])
-    val_y = torch.tensor(val_data[1])
+    # train_x = torch.tensor(train_data[0])
+    train_x = torch.tensor(train_data[1][:-output_chunk_length, ...])
+    train_y = torch.tensor(train_data[1][output_chunk_length:, ...])
+    train_y = train_y - torch.tensor(train_data[0][output_chunk_length:, ...])
+    
+    # val_x = torch.tensor(val_data[0])
+    val_x = torch.tensor(val_data[1][:-output_chunk_length, ...])
+    val_y = torch.tensor(val_data[1][output_chunk_length:, ...])
+    val_y = val_y - torch.tensor(val_data[0][output_chunk_length:, ...])
+    
     
     train_ds = SequeceDataset(train_x, train_y, seq_len=seq_config.model.seq_len)
     val_ds = SequeceDataset(val_x, val_y, seq_len=seq_config.model.seq_len)

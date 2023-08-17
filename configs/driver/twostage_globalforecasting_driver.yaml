@@ -17,11 +17,11 @@ model:
   sequence_config:
     batch_size: ${batch_size}
     epochs: ${epochs}
-    lr: 0.0001 # ${model.optimizer_kwargs.lr}
+    lr: 0.001 # ${model.optimizer_kwargs.lr}
     patience: ${callbacks.early_stopping.patience}
     model:
       _target_: src.modeling.modules.lstm.SimpleLSTM
-      seq_len: 1
+      seq_len: 10
       input_dim: ${model.memory_size}
       output_dim: ${model.memory_size}
       hidden_dim: 1024
