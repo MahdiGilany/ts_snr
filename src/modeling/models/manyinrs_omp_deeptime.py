@@ -13,6 +13,7 @@ import math
 import wandb
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
+from ..modules.regressors import RidgeRegressor
 from ..modules.matching_pursuit import (
     ManyINRsOrthogonalMatchingPursuitSecondVersion
     )
@@ -38,7 +39,7 @@ class _ManyINRsOMPDeepTIMeModel(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        n_inrs: int = 50,
+        n_inrs: int = 25,
         n_nonzero_coefs: int = 5,
         omp_tolerance: float = 1e-3,
         tau: float = 1e-3,
@@ -50,6 +51,9 @@ class _ManyINRsOMPDeepTIMeModel(PLPastCovariatesModule):
                        n_fourier_feats=n_fourier_feats, scales=scales) for _ in range(n_inrs)])
         
         self.OMP = ManyINRsOrthogonalMatchingPursuitSecondVersion(n_nonzero_coefs=n_nonzero_coefs, tol=omp_tolerance)
+        
+        # # deeptime manyinrs
+        # self.adaptive_weights = RidgeRegressor()
         
         # self.OMP = _OrthogonalMatchingPursuit(n_nonzero_coefs=n_nonzero_coefs, stop=layer_size, r_thresh=omp_threshold)
         # self.OMP = OrthogonalMatchingPursuitParallel(n_nonzero_coefs=n_nonzero_coefs)
@@ -83,6 +87,10 @@ class _ManyINRsOMPDeepTIMeModel(PLPastCovariatesModule):
         else:
             # time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
             time_reprs = torch.cat([self.inrs[i](coords) for i in range(self.n_inrs)], dim=0)
+            
+            # # deeptime manyinrs# deeptime manyinrs
+            # time_reprs = time_reprs.permute(1, 0, 2).reshape(1, time_reprs.shape[1], -1)
+            # time_reprs = repeat(time_reprs, '1 t d -> b t d', b=batch_size)
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len, :] # shape = (n_inrs, lookback_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:, :]
@@ -95,12 +103,17 @@ class _ManyINRsOMPDeepTIMeModel(PLPastCovariatesModule):
         # standard_deviation = x.std(dim=1, keepdim=True) + eps
         # x = (x - expectation) / standard_deviation
         
+        # omp
         coef = self.OMP.fit(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.OMP.forward(horizon_reprs, coef)
-        
-        
         # hack used for importance weights visualization (only first dim)
         self.learned_w = coef # shape = (batch_size, layer_size + 1)
+
+        # # regressor
+        # w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        # preds = torch.einsum('... d o, ... t d -> ... t o', [w, horizon_reprs]) + b
+        # # hack used for importance weights visualization (only first dim)
+        # self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
         
         # # reverse normalization
         # preds = preds * standard_deviation + expectation
