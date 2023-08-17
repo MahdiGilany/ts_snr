@@ -204,11 +204,12 @@ def manual_train_seq_model(
                 seq_pred = seq_model(seq_data)
                 loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
                 losses.append(loss.item())
+            avg_loss = np.mean(losses)
             if wandb_log:
-                wandb.log({"Seq/val_loss": np.mean(losses)})
-            if np.mean(losses) < best_val_loss:
+                wandb.log({"Seq/val_loss": avg_loss})
+            if avg_loss < best_val_loss:
                 early_stop_counter = 0
-                best_val_loss = loss.item()
+                best_val_loss = avg_loss
                 torch.save(seq_model, f"./{seq_model.model_name}.pt")
             if early_stop_counter > seq_config.patience:
                 log.info("Early stopping")
