@@ -195,6 +195,7 @@ def manual_train_seq_model(
         # validation
         seq_model.eval()
         losses = []
+        early_stop_counter += 1
         with torch.no_grad():
             for batch in val_dl:
                 seq_data, seq_label = batch
@@ -203,7 +204,6 @@ def manual_train_seq_model(
                 seq_pred = seq_model(seq_data)
                 loss = criterion(seq_pred[:,-1,...], seq_label[:,-1,...])
                 losses.append(loss.item())
-                early_stop_counter += 1
             if wandb_log:
                 wandb.log({"Seq/val_loss": np.mean(losses)})
             if np.mean(losses) < best_val_loss:
