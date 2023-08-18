@@ -33,5 +33,6 @@ class SimpleLSTM(nn.Module):
     def forward(self, X):
         assert X.shape[-1]==1, "X should be univariate for now"
         # X.shape # (batch_size, seq_len, input_dim, 1)
-        out, _ = self.lstm(X.squeeze(-1))
+        sample_size = 96
+        out, _ = self.lstm(X.squeeze(-1)[:,::sample_size,:])
         return out.unsqueeze(-1) #+ X # (batch_size, seq_len, output_dim, 1)

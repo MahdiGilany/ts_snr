@@ -14,6 +14,7 @@ import wandb
 
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
+from ..modules.diner import DinerSiren, NeRF
 from ..modules.regressors import RidgeRegressor, RidgeRegressorTrimmed
 
 from darts.logging import get_logger, raise_if_not, raise_log
@@ -24,11 +25,12 @@ from darts.utils.torch import MonteCarloDropout
 logger = get_logger(__name__)
 
 
-class _DeepTIMeModule(PLPastCovariatesModule):
+class _INRPlayDeepTIMeModule(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
     def __init__(
         self,
+        lookback_length: int,
         forecast_horizon_length: int = 12,
         datetime_feats: int = 0,
         layer_size: int = 256,
@@ -37,11 +39,26 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
+        out_features: int = 256,
         **kwargs,
         ):
         super().__init__(**kwargs)
-        self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
-                       n_fourier_feats=n_fourier_feats, scales=scales)
+        # self.inr = DinerSiren(hash_table_length=lookback_length+forecast_horizon_length,
+        #                       in_features=datetime_feats + 1 + 1, 
+        #                       hidden_features=layer_size, 
+        #                       hidden_layers=inr_layers, 
+        #                       out_features=out_features,)
+        self.inr = NeRF(
+            hash_mod=True,
+            hash_table_length=lookback_length+forecast_horizon_length,
+            in_features=datetime_feats + 1 + 127, 
+            hidden_features=layer_size, 
+            hidden_layers=inr_layers, 
+            out_features=out_features,
+            N_freqs=5,)
+        
+        # self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
+        #                n_fourier_feats=n_fourier_feats, scales=scales)
         self.adaptive_weights = RidgeRegressor()
         # self.adaptive_weights = RidgeRegressorTrimmed(no_remained_after_trim=3)
 
@@ -69,7 +86,9 @@ class _DeepTIMeModule(PLPastCovariatesModule):
             coords = torch.cat([coords, time], dim=-1)
             time_reprs = self.inr(coords)
         else:
-            time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
+            # breakpoint()
+            time_reprs = repeat(self.inr(coords).unsqueeze(0), '1 t d -> b t d', b=batch_size)
+            # time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
@@ -79,7 +98,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         # expectation = x.mean(dim=1, keepdim=True)
         # standard_deviation = x.std(dim=1, keepdim=True) + eps
         # x = (x - expectation) / standard_deviation
-        
+
         w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
         preds = self.forecast(horizon_reprs, w, b)       
         
@@ -87,34 +106,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
         
         # # reverse normalization
-        # preds = preds * standard_deviation + expectation
-        
-        
-        # # reversible intrance normalization per 96 steps
-        # eps = 1e-5
-        # x = x.view(batch_size, -1, 96, x.shape[-1]) # shape = (batch_size, lookback_len/96, 96, input_dim)
-        # expectation = x.mean(dim=2, keepdim=True)
-        # standard_deviation = x.std(dim=2, keepdim=True) + eps
-        # x = (x - expectation) / standard_deviation
-        # # x = x.reshape(batch_size, -1, x.shape[-1]) # shape = (batch_size, lookback_len, input_dim)
-        
-        # # predictions
-        # preds_all = []
-        # lookback_reprs = lookback_reprs.view(batch_size, -1, 96, lookback_reprs.shape[-1]) 
-        # w_all = []
-        # b_all = []
-        # for i in range(lookback_reprs.shape[1]):
-        #     w, b = self.adaptive_weights(lookback_reprs[:,i,...], x[:,i,...]) # w.shape = (batch_size, layer_size, output_dim)
-        #     w_all.append(w)
-        #     b_all.append(b)
-        #     preds_all.append(self.forecast(horizon_reprs, w, b)*standard_deviation[:,i,...]+expectation[:,i,...])
-        # preds = torch.stack(preds_all, dim=0)
-        # preds = preds.mean(dim=0)
-        
-        # w = torch.stack(w_all, dim=0).mean(dim=0)
-        # b = torch.stack(b_all, dim=0).mean(dim=0)
-        # self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
-        
+        # preds = preds * standard_deviation + expectation        
         
         try: 
             # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
@@ -205,7 +197,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         else:
             return optimizer
     
-class DeepTIMeModel(PastCovariatesTorchModel):
+class INRPlayDeepTIMeModel(PastCovariatesTorchModel):
     def __init__(
         self,
         input_chunk_length: int,
@@ -215,6 +207,7 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        out_features: int = 256,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -228,6 +221,7 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.out_features = out_features
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -247,7 +241,8 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         nr_params = 1 if self.likelihood is None else self.likelihood.num_parameters
         use_datetime = True if self.datetime_feats != 0 else False
         
-        return _DeepTIMeModule(
+        return _INRPlayDeepTIMeModule(
+            lookback_length=train_sample[0].shape[0],
             forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,
@@ -256,5 +251,6 @@ class DeepTIMeModel(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
+            out_features=self.out_features,
             **self.pl_module_params,
             )

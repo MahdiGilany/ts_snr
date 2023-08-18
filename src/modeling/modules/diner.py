@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
-from opt import HyperParameters
+# from opt import HyperParameters
 
 class ReluLayer(nn.Module):
     def __init__(self, in_features, out_features, bias=True):
@@ -441,7 +441,7 @@ class NeRF(nn.Module):
         # self.table = nn.parameter.Parameter(data=data.to("cuda:0"),requires_grad=True)
 
         self.hash_mod = hash_mod
-        if not hash_mod:
+        if hash_mod:
             self.table = nn.parameter.Parameter(1e-4 * (torch.rand((hash_table_length,in_features))*2 -1),requires_grad = True)
 
         self.net = []
@@ -458,7 +458,7 @@ class NeRF(nn.Module):
     def forward(self, coords):
         if self.hash_mod:
             output = self.net(self.table)
-            output = torch.clamp(output, min = -1.0,max = 1.0)
+            # output = torch.clamp(output, min = -1.0,max = 1.0)
         else:
             output = self.net(coords)
             output = torch.clamp(output, min = -1.0,max = 1.0)

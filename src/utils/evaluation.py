@@ -58,11 +58,13 @@ def wandb_log_bases(
     
     # plots_table = wandb.Table(columns=["ID", "plots"])
     x_values = np.arange(time_reprs.shape[0])
+    _max = np.max(time_reprs)
+    _min = np.min(time_reprs) 
     for i in range(time_reprs.shape[1]):
         plt.plot(x_values, time_reprs[:, i], label=f"basis_{i}")
         if i%5==4:
             # plt.axvline(x = lookback_len, color = 'red', linestyle = '--')
-            plt.plot((lookback_len,lookback_len),(-1,5), color='red', linestyle='--')
+            plt.plot((lookback_len,lookback_len),(_min*1.5,_max*1.5), color='red', linestyle='--')
             plt.legend()
             wandb.log({f"Plots/bases_{i-4}_{i}": plt})
             plt.figure()
