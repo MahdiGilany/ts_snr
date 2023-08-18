@@ -3,7 +3,7 @@
 defaults:
   - exp_default
   
-name: resolving_instability_omp_exchange_std1.5_nonzero75_layersz256_normalized_dict_blackbox
+name: NeRFinrplay_deeptime_exchange_noise0.9_laplace_infeat128_layersize256_outfeat256_inrlayers5_in288_out96_Nfreq5_noclamp
 epochs: 100
 batch_size: 256
 seed: 0
@@ -16,17 +16,25 @@ trainer:
 
 data:
   dataset_name: exchange_rate
-  # split_ratio: [0.7, 0.1, 0.2]
-  noise_std: 1.5 # 0.1
+  # split_ratio: [0.15, 0.05, 0.05]
+  noise_std: 0.9 # 0.1
+  noise_type: laplace
   target_series_index: -2
+  # prct_rows_to_load: .1
+  # crypto_name: Bitcoin
 
 model:
-  model_name: omp_deeptime
+  model_name: inrplay_deeptime
   output_chunk_length: 96
   input_chunk_length: 288
-  omp_tolerance: 0.001
-  n_nonzero_coefs: 75
+  # K: 100
+  # omp_tolerance: 0.001
+  # n_nonzero_coefs: 45
   layer_size: 256
+  out_features: 256
+  inr_layers: 5
+  # optimizer_kwargs: 
+  #   lr: 0.0001
 
 # callbacks:
 #   model_checkpoint:
