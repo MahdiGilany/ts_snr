@@ -5,16 +5,17 @@ noise_type="laplace"
 version=sparsity_benchmarking
 omp_version=sparsity_benchmarking
 
+# defaults
+crypto_name="Bitcoin"
+# crypto_name="Ethereum"
+# crypto_name="Litecoin"
+prct_rows_to_load=0.1
+
 # with loop over noise and seeds
-for model_name in  deeptime nbeats omp_deeptime naive_martingle # mixture_experts_deeptime  # l1_deeptime vd_deeptime # inrplay_deeptime 
+for model_name in  deeptime nbeats omp_deeptime naive_martingle mixture_experts_deeptime  # l1_deeptime vd_deeptime # inrplay_deeptime(NeRF) 
 do
-    for dataset_name in etth2 exchange_rate traffic crypto  #ettm2
+    for dataset_name in etth2 exchange_rate traffic #crypto 
     do
-        # defaults
-        # crypto_name="Bitcoin"
-        crypto_name="Ethereum"
-        # crypto_name="Litecoin"
-        prct_rows_to_load=0.1
 
         # multiple
         if [ $dataset_name == "etth2" ]
@@ -60,6 +61,11 @@ do
             sbatch scripts/skynet_noise_naive.sh version=$version model_name=$model_name dataset_name=$dataset_name\
             target_series_index=$target_index multiple=1 output_chunk_length=$output_chunk_length noise_type=$noise_type\
             crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load 
+        elif [ $model_name == "mixture_experts_deeptime" ]
+        then
+            sbatch scripts/skynet_noise_MOE.sh version=$version model_name=$model_name dataset_name=$dataset_name\
+            target_series_index=$target_index multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type\
+            K_value=$n_nonzero_coefs crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load 
         else
             if [ $model_name == "nbeats" ] && [ $dataset_name == "exchange_rate" ]
             then

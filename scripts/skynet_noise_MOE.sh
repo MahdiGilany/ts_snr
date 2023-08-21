@@ -43,7 +43,7 @@ noise_type="gaussian"
 noise_std=0
 target_series_index=-2
 layer_size=256
-K=45
+K_value=45
 new_dir=True
 verbose=False
 multiple=3
@@ -77,7 +77,7 @@ if [ $input_chunk_length == -1 ]
 then
     input_chunk_length=$((output_chunk_length * multiple))
 fi
-group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_K${K}_noise_${noise_type}_std${noise_std}_v${version}"
+group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_K${K_value}_noise_${noise_type}_std${noise_std}_v${version}"
 name="${group}_seed${rand_seed}"
 
 echo "seed ${rand_seed} and noise std ${noise_std} model_name ${model_name}"
@@ -93,7 +93,7 @@ python main.py name=$name\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
             model.loss_fn.loss_name=$loss_name\
-            +model.K=$K\
+            +model.K=$K_value\
             data.dataset_name=$dataset_name\
             +data.crypto_name=$crypto_name\
             +data.prct_rows_to_load=$prct_rows_to_load\
