@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=3-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti07,compute1080ti08,compute1080ti10
+#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -58,10 +58,12 @@ done
 # run experiment
 # python scripts/test.py
 
-for seed in {0..4}
+for seed in {0..2}
 do
 
-for noise_std in 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
+rand_seed=$((seed + SLURM_JOB_ID))
+
+for noise_std in 0 0.5 1.0 # 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
@@ -70,12 +72,12 @@ then
     input_chunk_length=$((output_chunk_length * multiple))
 fi
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_${noise_type}_std${noise_std}_v${version}"
-name="${group}_seed${seed}"
+name="${group}_seed${rand_seed}"
 
-echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
+echo "seed ${rand_seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
             experiment=$experiment\
-            seed=$seed\
+            seed=$rand_seed\
             batch_size=$batch_size\
             epochs=$epochs\
             new_dir=$new_dir\

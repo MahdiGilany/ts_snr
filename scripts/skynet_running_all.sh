@@ -6,7 +6,7 @@ version=sparsity_benchmarking
 omp_version=sparsity_benchmarking
 
 # with loop over noise and seeds
-for model_name in deeptime nbeats omp_deeptime # naive_martingle mixture_experts_deeptime  # l1_deeptime vd_deeptime # inrplay_deeptime 
+for model_name in deeptime nbeats omp_deeptime naive_martingle # mixture_experts_deeptime  # l1_deeptime vd_deeptime # inrplay_deeptime 
 do
     for dataset_name in etth2 exchange_rate traffic #crypto  #ettm2
     do
@@ -46,6 +46,10 @@ do
                 target_series_index=$target_index multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type\
                 n_nonzero_coefs=$n_nonzero_coefs        
             # done
+        elif [ $model_name == "naive_martingle" ]
+        then
+            sbatch scripts/skynet_noise_naive.sh version=$version model_name=$model_name dataset_name=$dataset_name\
+            target_series_index=$target_index multiple=1 output_chunk_length=$output_chunk_length noise_type=$noise_type
         else
             if [ $model_name == "nbeats" ] && [ $dataset_name == "exchange_rate" ]
             then
