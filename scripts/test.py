@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from darts import TimeSeries
 from darts.datasets import AirPassengersDataset
 import torch
+import learn2learn
 
 # import wandb
 # wandb.init(project="ts_snr", entity="borealisai")
@@ -40,17 +41,19 @@ import torch
 # y.backward()
 # print(x.grad, y.is_leaf, x.is_leaf, x.grad.is_leaf)
 
-import numpy as np
+# import numpy as np
 
-x = np.arange(1000000)
-a = x.reshape(20, 50000)
-print(a)
+# x = np.arange(1000000)
+# a = x.reshape(20, 50000)
+# print(a)
 
-np.random.seed(0)
-_laplace = np.random.laplace(0, 1, a.shape)
-_normal = np.random.normal(0, 1, a.shape)
-print(_laplace)
+# np.random.seed(0)
+# _laplace = np.random.laplace(0, 1, a.shape)
+# _normal = np.random.normal(0, 1, a.shape)
+# print(_laplace)
 
-plt.hist(_laplace[0,:], bins=50)
-plt.hist(_normal[0,:], bins=50, alpha=0.5)
-plt.savefig("laplace.png")
+# plt.hist(_laplace[0,:], bins=50)
+# plt.hist(_normal[0,:], bins=50, alpha=0.5)
+# plt.savefig("laplace.png")
+model = learn2learn.algorithms.MAML(torch.nn.Linear(2, 2), lr=0.01, first_order=False)
+print(model)

@@ -17,7 +17,7 @@ import torch.nn.functional as F
 class RidgeRegressor(nn.Module):
     def __init__(self, lambda_init: Optional[float] =0.):
         super().__init__()
-        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float))
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True)
 
     def forward(self, reprs: Tensor, x: Tensor, reg_coeff: Optional[float] = None) -> Tensor:
         if reg_coeff is None:
