@@ -64,7 +64,7 @@ done
 # run experiment
 # python scripts/test.py
 
-for seed in {0..2}
+for seed in {0..4}
 do
 
 rand_seed=$((seed + SLURM_JOB_ID))
@@ -93,7 +93,7 @@ python main.py name=$name\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
             model.loss_fn.loss_name=$loss_name\
-            +model.K=$K_value\
+            +model.K_value=$K_value\
             data.dataset_name=$dataset_name\
             +data.crypto_name=$crypto_name\
             +data.prct_rows_to_load=$prct_rows_to_load\

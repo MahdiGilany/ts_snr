@@ -38,7 +38,7 @@ class _MixtureExpertsDeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        K: int = 5,
+        K_value: int = 5,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -54,7 +54,7 @@ class _MixtureExpertsDeepTIMeModule(PLPastCovariatesModule):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
-        self.K = K
+        self.K_value = K_value
         
         self.nr_params = nr_params
         self.use_datetime = use_datetime
@@ -80,7 +80,7 @@ class _MixtureExpertsDeepTIMeModule(PLPastCovariatesModule):
         batch_size, sum_chunk_length, _ = time_reprs.shape
         gate_logits = [self.fc_gate(x[..., i]) for i in range(output_dim)] # list of output_dim tensors of shape (batch_size, layer_size) 
         gate_logits = torch.stack(gate_logits, dim=-1).mean(dim=-1) #(batch_size, layer_size)
-        top_K_gate_logits, top_k_indices = torch.topk(gate_logits, self.K, dim=-1, sorted=False) #(batch_size, K) and differentiable
+        top_K_gate_logits, top_k_indices = torch.topk(gate_logits, self.K_value, dim=-1, sorted=False) #(batch_size, K) and differentiable
         gate_values = torch.softmax(top_K_gate_logits, dim=-1) #(batch_size, K) 
         
         # selecting the experts
@@ -204,7 +204,7 @@ class MixtureExpertsDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
-        K: int = 5,
+        K_value: int = 5,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -218,7 +218,7 @@ class MixtureExpertsDeepTIMeModel(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
-        self.K = K
+        self.K_value = K_value
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -248,6 +248,6 @@ class MixtureExpertsDeepTIMeModel(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
-            K=self.K,
+            K_value=self.K_value,
             **self.pl_module_params,
             )
