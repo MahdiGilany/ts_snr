@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -5,6 +6,7 @@ from darts import TimeSeries
 from darts.datasets import AirPassengersDataset
 import torch
 import learn2learn
+import pandas as pd
 
 # import wandb
 # wandb.init(project="ts_snr", entity="borealisai")
@@ -55,5 +57,12 @@ import learn2learn
 # plt.hist(_laplace[0,:], bins=50)
 # plt.hist(_normal[0,:], bins=50, alpha=0.5)
 # plt.savefig("laplace.png")
-model = learn2learn.algorithms.MAML(torch.nn.Linear(2, 2), lr=0.01, first_order=False)
-print(model)
+# model = learn2learn.algorithms.MAML(torch.nn.Linear(2, 2), lr=0.01, first_order=False)
+# print(model)
+print(os.getcwd())
+df = pd.read_csv("./scripts/wandb_results_week16.csv")
+unique_groupkeys = df["groupkeys"].unique()
+for groupkey in unique_groupkeys:
+    df_group = df[df["groupKeys"] == groupkey]
+    df.groupby(["groupKeys"]).mean()
+    # df_group.to_csv(f"./scripts/wandb_results_week16_{groupkey}.csv")
