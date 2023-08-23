@@ -2,10 +2,11 @@
 '''
 
 import warnings
-from typing import List, NewType, Tuple, Union
+from typing import Any, List, NewType, Tuple, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch import Tensor
 import torch.nn as nn
 from torch.optim.lr_scheduler import LambdaLR
@@ -25,7 +26,21 @@ import learn2learn as l2l
 
 logger = get_logger(__name__)
 
-
+class linears(nn.Module):
+    def __init__(self, in_feats, out_feats, no_parallel_fc, bias=True):
+        super().__init__()
+        self.list_fc = [nn.Linear(in_feats, out_feats, bias=bias) for _ in range(no_parallel_fc)]
+        self.list_fc = nn.ModuleList(self.list_fc)
+    
+    def forward(self, x):
+        batch_size = x.shape[0]
+        assert (batch_size <= len(self.list_fc)), "batch_size must be less or equal than the number of parallel fc layers"
+        return torch.cat([self.list_fc[i](x[i:i+1]) for i in range(batch_size)], dim=0)
+        
+    def reset_parameters(self):
+        for fc in self.list_fc:
+            fc.reset_parameters()
+    
 class _DeepTIMeModelMAML(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
@@ -39,18 +54,22 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        adaptation_steps: int = 1,
+        adaptation_steps: int = 5,
+        batch_size: int = 256,
         **kwargs,
         ):
         super().__init__(**kwargs)
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
-        self.maml = l2l.algorithms.MAML(nn.Sequential(fc),
-                                        lr=0.1,
+        # fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
+        fcs = linears(layer_size, 1, batch_size)
+        self.maml = l2l.algorithms.MAML(fcs,
+                                        lr=0.5,
                                         first_order=False
                                         )
-        self.adaptive_weights = RidgeRegressor()
+        self._lambda = nn.Parameter(torch.as_tensor(0.0, dtype=torch.float), requires_grad=False)
+
+        # self.adaptive_weights = RidgeRegressor()
         self.adaptation_steps = adaptation_steps
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
@@ -66,9 +85,18 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
     def fast_adapt(self, base_learner, x, y, adaptation_steps=1):
         # self.maml.train()
         loss = nn.MSELoss()
+        
+        # define weights and biases every time
+        # w, b = torch.tensor()
+        # init.kaiming_uniform_(w, a=math.sqrt(5))
+        # if self.bias is not None:
+        #     fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
+        #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+        #     init.uniform_(self.bias, -bound, bound)
+        
         # Adapt the model
         for step in range(adaptation_steps):
-            allow_nograd=False
+            # allow_nograd=False
             if self.val:
             #     # breakpoint()
             #     x.requires_grad_(True)
@@ -77,13 +105,23 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 [p.requires_grad_(True) for p in base_learner.parameters()]
                 x = x.detach().clone().requires_grad_(True)
             with torch.enable_grad():
-                train_error = loss(base_learner(x), y)
-                base_learner.adapt(train_error, allow_nograd=allow_nograd)
+                # breakpoint()
+                l2_reg = torch.tensor(0., device=x.device, dtype=x.dtype)
+                for param in base_learner.parameters():
+                    l2_reg += torch.norm(param)**2
+                # l2_reg = torch.sum([p.norm(p=2)**2 for p in base_learner.parameters()])
+                # train_error = loss(base_learner(x), y) + self.reg_coeff()*torch.norm(fc_w, p=2)**2
+                train_error = loss(base_learner(x), y) #+ self.reg_coeff()*l2_reg
+                # breakpoint()
+                base_learner.adapt(train_error, allow_unused=True)# allow_nograd=allow_nograd)
+                if not self.val:
+                    wandb.log({'MAML/train_error': train_error, 'MAML/l2_reg': l2_reg})
         
     def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         x = x_in[0]
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, outdim = x.shape
+        self.batch_size = batch_size
         assert outdim == 1, "DeepTIMeModelMAML only supports 1-dimensional targets for now"
         coords = self.get_coords(lookback_len, tgt_horizon_len).to(x.device) # shape = (1, lookback_len + forecast_horizon_length, 1)
         # coords = repeat(coords, '1 t 1 -> b t 1', b=batch_size)
@@ -93,6 +131,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
         
+        
+        self.maml.module.reset_parameters()
         base_learner = self.maml.clone()
         self.fast_adapt(base_learner, lookback_reprs, x, adaptation_steps=self.adaptation_steps)
         
@@ -194,6 +234,12 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.val_metrics)
         return loss
 
+    def backward(self, loss: Tensor, *args: Any, **kwargs: Any) -> None:
+        super().backward(loss, *args, **kwargs)
+        
+        # [p.grad.data.mul_(1.0 / (self.batch_size)) for p in self.maml.parameters()]
+        # [p.grad.data.mul_(1.0 / (self.batch_size)) for p in self.inr.parameters()]
+    
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
 
@@ -270,6 +316,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         else:
             return optimizer
     
+    def reg_coeff(self) -> Tensor:
+        return F.softplus(self._lambda)
 class DeepTIMeModelMAML(PastCovariatesTorchModel):
     def __init__(
         self,
@@ -280,6 +328,7 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        batch_size: int = 256,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -293,6 +342,7 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.batch_size = batch_size
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -321,5 +371,6 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
+            batch_size=self.batch_size,
             **self.pl_module_params,
             )
