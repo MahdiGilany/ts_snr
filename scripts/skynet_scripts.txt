@@ -29,3 +29,5 @@ find -maxdepth 1 | grep Slurm_OT | xargs rm -r
 du -h slurm_logs/* | sort -hr
 
 ln -s /directory/to/link /new_name
+
+python main.py experiment=exp_test
