@@ -55,7 +55,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        adaptation_steps: int = 5,
+        adaptation_steps: int = 15,
         batch_size: int = 256,
         **kwargs,
         ):
@@ -196,12 +196,13 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                     p.grad.data.add_(-1.0, l.data)
             
                 # update inr model
-                sd = self._opt.state_dict()
-                lr = sd['param_groups'][2]['lr']
+                # sd = self._opt.state_dict()
+                # lr = sd['param_groups'][2]['lr']
+                lr = self.lr_schedulers().get_lr()[-1]
                 optimizer = self.reptile_optimizers(inr_model.named_parameters(), lr=lr)
                 # optimizer.load_state_dict(self._opt.state_dict())
                 optimizer.zero_grad()
-                loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len])), x[i:i+1,...])            
+                loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len]))[...,None], x[i:i+1,...])            
                 loss.backward()
                 optimizer.step()            
                 
@@ -269,15 +270,17 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.train_metrics)
         
         # normalize gradients
-        for p in self.fc.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
-        for p in self.inr.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        # for p in self.fc.parameters():
+        #     p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        # for p in self.inr.parameters():
+        #     p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
         
         # backward pass for inr
         self.manual_backward(loss) #or loss.backward()
         
         self._opt.step()
+        if self.trainer.is_last_batch:
+            self.lr_schedulers().step()
         return loss
 
     def validation_step(self, val_batch, batch_idx) -> torch.Tensor:
