@@ -360,13 +360,13 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 elif scheduler == 'cosine_annealing':
                     lr = eta_max = param_group['lr']
                     fn = lambda T_cur: (eta_min + 0.5 * (eta_max - eta_min) * (
-                                1.0 + math.cos((T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
+                                1.0 + math.cos((T_cur+1 - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
                     
                 elif scheduler == 'cosine_annealing_with_linear_warmup':
                     lr = eta_max = param_group['lr']
-                    fn = lambda T_cur: T_cur / warmup_epochs if T_cur < warmup_epochs else (eta_min + 0.5 * (
+                    fn = lambda T_cur: (T_cur + 1) / warmup_epochs if T_cur < warmup_epochs else (eta_min + 0.5 * (
                                 eta_max - eta_min) * (1.0 + math.cos(
-                        (T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
+                        (T_cur + 1 - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
                     
                 else:
                     raise ValueError(f'No such scheduler, {scheduler}')
