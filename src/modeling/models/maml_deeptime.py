@@ -60,14 +60,18 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         **kwargs,
         ):
         super().__init__(**kwargs)
+        
+        # activating manual optimization
+        self.automatic_optimization = False
+        
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
-        fcs = linears(layer_size, 1, batch_size)
-        self.maml = l2l.algorithms.MAML(fcs,
-                                        lr=0.5,
-                                        first_order=False
-                                        )
+        # fcs = linears(layer_size, 1, batch_size)
+        # self.maml = l2l.algorithms.MAML(fcs,
+        #                                 lr=0.5,
+        #                                 first_order=False
+        #                                 )
         
         
         
@@ -127,15 +131,33 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
     
     # reptile fast adapt
     def fast_adapt(self, base_learner, x, y, adaptation_steps=1):
+        optimizer = torch.optim.SGD(base_learner.parameters(), 0.01)
+        loss = nn.MSELoss()
+        
+        # this ensures that inr is not affected by the adaptation
+        x = x.detach().clone().requires_grad_(True)
+        
+        # this ensures that in meta validation, the weights are still updated 
+        if self.val:
+            [p.requires_grad_(True) for p in base_learner.parameters()]
+        
+        # turns torch.no_grad() off in meta validation
+        with torch.enable_grad():
+            for step in range(adaptation_steps):
+                optimizer.zero_grad()
+                train_error = loss(base_learner(x), y)
+                train_error.backward()
+                optimizer.step()
+        
+        return train_error.item()
     
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:        
         x = x_in[0]
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, outdim = x.shape
-        self.batch_size = batch_size
+        self._cur_batch_size = batch_size
         assert outdim == 1, "DeepTIMeModelMAML only supports 1-dimensional targets for now"
         coords = self.get_coords(lookback_len, tgt_horizon_len).to(x.device) # shape = (1, lookback_len + forecast_horizon_length, 1)
-        # coords = repeat(coords, '1 t 1 -> b t 1', b=batch_size)
         
         time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size) # shape = (batch_size, lookback_len + forecast_horizon_length, layer_size)
 
@@ -151,7 +173,48 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         
         # Reptile
-        linear_model = deepcopy(self.fc)
+        self.lookback_reprs = lookback_reprs
+        
+        # zero-grad the parameters
+        for p in self.inr.parameters():
+            p.grad = torch.zeros_like(p.data)
+        for p in self.fc.parameters():
+            p.grad = torch.zeros_like(p.data)
+        
+        
+        linear_errors = []
+        preds = []
+        for i in range(batch_size):
+            inr_model = deepcopy(self.inr)
+            linear_model = deepcopy(self.fc)
+            linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
+            linear_errors.append(linear_error)
+            
+            if not self.val:
+                # reptile update for self.fc
+                for p, l in zip(self.fc.parameters(), linear_model.parameters()):
+                    p.grad.data.add_(-1.0, l.data)
+            
+                # update inr model
+                sd = self._opt.state_dict()
+                lr = sd['param_groups'][2]['lr']
+                optimizer = self.reptile_optimizers(inr_model.named_parameters(), lr=lr)
+                # optimizer.load_state_dict(self._opt.state_dict())
+                optimizer.zero_grad()
+                loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len])), x[i:i+1,...])            
+                loss.backward()
+                optimizer.step()            
+                
+                # reptile update for self.inr
+                for p, l in zip(self.inr.parameters(), inr_model.parameters()):
+                    p.grad.data.add_(-1.0, l.data)
+            
+            pred = horizon_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach()
+            preds.append(pred)
+            
+        preds = torch.cat(preds, dim=0)
+        
+        
 
         w = 0*lookback_reprs[:,0,:] #next(self.maml.parameters())
         self.learned_w = w # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
@@ -159,10 +222,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         
         try: 
-            # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
-            goodness_of_base_fit = (x - torch.einsum('... d o, ... t d -> ... t o', [w, lookback_reprs]) + b).squeeze(-1).norm(dim=1).mean()
-            wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
-            # wandb.log({'rel_norm_res': goodness_of_base_fit/x.squeeze(-1).norm(dim=1).mean()})
+            wandb.log({'goodness_of_base_fit': np.mean(linear_errors)})
         except:
             pass
         
@@ -171,15 +231,27 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         )
         return preds
     
+    # def _compute_regularization_loss(self, x_in: torch.Tensor):
+    #     x = x_in[0]
+    #     self._compute_loss()
+    
+    
+    
     def training_step(self, train_batch, batch_idx) -> torch.Tensor:
         """performs the training step"""
+        # manual optimization
+        self._opt = self.optimizers()
+        self._opt.zero_grad()
+        
         self.val = False
+        self.y = train_batch[-1]
+        
         output = self._produce_train_output(train_batch[:-1])
         target = train_batch[
             -1
         ]  # By convention target is always the last element returned by datasets
         _loss = self._compute_loss(output, target)
-        loss = _loss #+ self._compute_regularization_loss()
+        loss = _loss #+ self._compute_regularization_loss(train_batch[:-1])
         # self.log(
         #     "train_reg_loss",
         #     loss,
@@ -195,6 +267,17 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             sync_dist=True,
         )
         self._calculate_metrics(output, target, self.train_metrics)
+        
+        # normalize gradients
+        for p in self.fc.parameters():
+            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        for p in self.inr.parameters():
+            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        
+        # backward pass for inr
+        self.manual_backward(loss) #or loss.backward()
+        
+        self._opt.step()
         return loss
 
     def validation_step(self, val_batch, batch_idx) -> torch.Tensor:
@@ -216,8 +299,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
     def backward(self, loss: Tensor, *args: Any, **kwargs: Any) -> None:
         super().backward(loss, *args, **kwargs)
         
-        # [p.grad.data.mul_(1.0 / (self.batch_size)) for p in self.maml.parameters()]
-        # [p.grad.data.mul_(1.0 / (self.batch_size)) for p in self.inr.parameters()]
+        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.maml.parameters()]
+        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.inr.parameters()]
     
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
@@ -295,8 +378,38 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         else:
             return optimizer
     
+    def reptile_optimizers(self, reptile_params, lr=0.01):
+        # self.super().configure_optimizers()
+        """configures optimizers and learning rate schedulers for model optimization."""
+
+        # Create the optimizer and (optionally) the learning rate scheduler
+        # we have to create copies because we cannot save model.parameters into object state (not serializable)
+        optimizer_kws = {k: v for k, v in self.optimizer_kwargs.items()}
+        
+        no_decay_list = ('bias', 'norm',)
+        group1_params = []  # lambda
+        group2_params = []  # no decay
+        group3_params = []  # decay
+        for param_name, param in reptile_params:
+            if '_lambda' in param_name:
+                group1_params.append(param)
+            elif any([mod in param_name for mod in no_decay_list]):
+                group2_params.append(param)
+            else:
+                group3_params.append(param)
+        
+        list_params = [
+            {'params': group1_params, 'weight_decay': 0, 'lr': 1.0, 'scheduler': 'cosine_annealing'},
+            {'params': group2_params, 'weight_decay': 0, 'lr': lr},
+            {'params': group3_params, 'lr': lr}
+            ]
+        optimizer: torch.optim.optimizer.Optimizer = self.optimizer_cls(list_params, **optimizer_kws)
+    
+        return optimizer
+ 
     def reg_coeff(self) -> Tensor:
         return F.softplus(self._lambda)
+
 class DeepTIMeModelMAML(PastCovariatesTorchModel):
     def __init__(
         self,
