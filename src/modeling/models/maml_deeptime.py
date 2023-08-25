@@ -137,8 +137,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             
             pred = linear_model(horizon_reprs[i:i+1,...])
             if not self.val:
-                loss = self._compute_loss(pred, self.y[i:i+1,...])
-                self.manual_backward(loss)
+                loss = self._compute_loss(pred[...,None], self.y[i:i+1,...])
+                loss.backward(retain_graph=True)
             preds.append(pred.detach()) # no backward from this point so detach
             
             # for visualization
