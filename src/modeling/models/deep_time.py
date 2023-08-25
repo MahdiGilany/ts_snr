@@ -71,6 +71,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         else:
             time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
+        time_reprs = time_reprs/torch.norm(time_reprs, dim=1, keepdim=True)
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
         

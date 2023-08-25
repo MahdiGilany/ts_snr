@@ -17,6 +17,7 @@ from copy import deepcopy
 from einops import rearrange, repeat, reduce
 from ..modules.inr import INR
 from ..modules.regressors import RidgeRegressor, RidgeRegressorTrimmed
+from ..modules.weight_decay import L2, L1
 
 from darts.logging import get_logger, raise_if_not, raise_log
 from darts.models.forecasting.pl_forecasting_module import PLForecastingModule, PLPastCovariatesModule
@@ -64,9 +65,12 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         # activating manual optimization
         self.automatic_optimization = False
         
+        self._lambda = nn.Parameter(torch.as_tensor(0.0, dtype=torch.float), requires_grad=False)
+        
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
         self.fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
+        # self.fc = L2(nn.Linear(layer_size, 1), self.reg_coeff()) # for now accepts 1-dimensional targets only
         # fcs = linears(layer_size, 1, batch_size)
         # self.maml = l2l.algorithms.MAML(fcs,
         #                                 lr=0.5,
@@ -75,7 +79,6 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         
         
-        self._lambda = nn.Parameter(torch.as_tensor(0.0, dtype=torch.float), requires_grad=False)
 
         # self.adaptive_weights = RidgeRegressor()
         self.adaptation_steps = adaptation_steps
@@ -141,11 +144,15 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         if self.val:
             [p.requires_grad_(True) for p in base_learner.parameters()]
         
+        
         # turns torch.no_grad() off in meta validation
         with torch.enable_grad():
             for step in range(adaptation_steps):
                 optimizer.zero_grad()
-                train_error = loss(base_learner(x), y)
+                _reg = torch.tensor(0., device=x.device, dtype=x.dtype)
+                for param in base_learner.parameters():
+                    _reg += torch.norm(param)**2
+                train_error = loss(base_learner(x), y) + self.reg_coeff()*_reg
                 train_error.backward()
                 optimizer.step()
         
@@ -214,7 +221,10 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             # loss = self._compute_loss(lookback_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach(), x[i:i+1,...])            
             # losses.append(loss)
             
-            pred = horizon_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach()
+            try:
+                pred = horizon_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach()
+            except:
+                pred = horizon_reprs[i:i+1,...] @ linear_model.module.weight[..., None].detach() + linear_model.module.bias.detach()
             preds.append(pred)
             
         preds = torch.cat(preds, dim=0)
