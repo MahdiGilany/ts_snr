@@ -31,17 +31,38 @@ logger = get_logger(__name__)
 class linears(nn.Module):
     def __init__(self, in_feats, out_feats, no_parallel_fc, bias=True):
         super().__init__()
-        self.list_fc = [nn.Linear(in_feats, out_feats, bias=bias) for _ in range(no_parallel_fc)]
-        self.list_fc = nn.ModuleList(self.list_fc)
-    
+        # self.list_fc = [nn.Linear(in_feats, out_feats, bias=bias) for _ in range(no_parallel_fc)]
+        # self.list_fc = nn.ModuleList(self.list_fc)
+        self.in_feats = in_feats
+        self.out_feats = out_feats
+        self.no_parallel_fc = no_parallel_fc
+        self.weights = nn.Parameter(torch.randn(no_parallel_fc, in_feats, out_feats), requires_grad=True)
+        self.biases = nn.Parameter(torch.randn(no_parallel_fc, 1, out_feats), requires_grad=True)
+        # self.weights = nn.Parameter(torch.randn(in_feats, out_feats), requires_grad=True)
+        # self.biases = nn.Parameter(torch.randn(1, out_feats), requires_grad=True)
+        self.reset_parameters()
+        
     def forward(self, x):
         batch_size = x.shape[0]
-        assert (batch_size <= len(self.list_fc)), "batch_size must be less or equal than the number of parallel fc layers"
-        return torch.cat([self.list_fc[i](x[i:i+1]) for i in range(batch_size)], dim=0)
+        assert (batch_size <= self.weights.shape[0]), "batch_size must be less or equal than the number of parallel fc layers"
+        out = x @ self.weights[:batch_size,...] + self.biases[:batch_size,...]
+        return out
+        # weights = repeat(self.weights[None,...], '1 i o -> b i o', b=batch_size)
+        # biases = repeat(self.biases[None,...], '1 i o -> b i o', b=batch_size)
+        # return x @ weights + biases
+        # assert (batch_size <= len(self.list_fc)), "batch_size must be less or equal than the number of parallel fc layers"
+        # return torch.cat([self.list_fc[i](x[i:i+1]) for i in range(batch_size)], dim=0)
         
     def reset_parameters(self):
-        for fc in self.list_fc:
-            fc.reset_parameters()
+        # for fc in self.list_fc:
+        #     fc.reset_parameters()
+        # torch.nn.init.xavier_uniform_(self.weights)
+        for i in range (self.no_parallel_fc):
+            torch.nn.init.kaiming_uniform_(self.weights[i,...], a=math.sqrt(5))
+            if self.biases is not None:
+                fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weights[i,...])
+                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                torch.nn.init.uniform_(self.biases[i,...], -bound, bound)
     
 class _DeepTIMeModelMAML(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
@@ -56,8 +77,10 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        adaptation_steps: int = 15,
+        adaptation_steps: int = 50,
         batch_size: int = 256,
+        fast_version: bool = False,
+        reset_linears: bool = False,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -69,10 +92,15 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
-        # fcs = linears(layer_size, 1, batch_size)
+        
+        # for now accepts 1-dimensional targets only
+        if fast_version:
+            fc = linears(layer_size, 1, batch_size)
+        else:
+            fc = nn.Linear(layer_size, 1)
+
         self.maml = l2l.algorithms.MAML(fc,
-                                        lr=0.01,
+                                        lr=0.1,
                                         first_order=False
                                         )
         
@@ -83,6 +111,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.fast_version = fast_version
+        self.reset_linears = reset_linears # reseting linear heads for 
         self.val=True
         
         self.nr_params = nr_params
@@ -129,24 +159,41 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             p.grad = torch.zeros_like(p.data)
 
         linear_errors = []
-        preds = []
-        for i in range(batch_size):
-            linear_model = self.maml.clone() # head of the model
-            linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
+        if self.fast_version:
+            linears_model = self.maml.clone() # head of the model
+            linear_error = self.fast_adapt(linears_model, lookback_reprs, x, adaptation_steps=self.adaptation_steps)
             linear_errors.append(linear_error)
-            
-            pred = linear_model(horizon_reprs[i:i+1,...])
+            preds = linears_model(horizon_reprs)
             if not self.val:
-                loss = self._compute_loss(pred[...,None], self.y[i:i+1,...])
+                loss = self._compute_loss(preds[...,None], self.y)
                 loss.backward(retain_graph=True)
-            preds.append(pred.detach()) # no backward from this point so detach
+            preds = preds.detach() # no backward from this point so detach
             
             # for visualization
-            w = linear_model.weight[..., None].detach()
-            b = linear_model.bias.detach()
+            w = linears_model.weights.detach()
             
+            # reset parameters
+            if self.reset_linears:
+                self.maml.module.reset_parameters()
+        else:
+            preds = []
+            for i in range(batch_size):
+                linear_model = self.maml.clone() # head of the model
+                linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
+                linear_errors.append(linear_error)
+                
+                pred = linear_model(horizon_reprs[i:i+1,...])
+                if not self.val:
+                    loss = self._compute_loss(pred[...,None], self.y[i:i+1,...])
+                    loss.backward(retain_graph=True)
+                preds.append(pred.detach()) # no backward from this point so detach
+                
+                # for visualization
+                w = linear_model.weight[..., None].detach()
+                b = linear_model.bias.detach()
+                
 
-        preds = torch.cat(preds, dim=0)
+            preds = torch.cat(preds, dim=0)
         
         # for visualization
         self.learned_w = w[...,0] # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
@@ -185,8 +232,13 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.train_metrics)
         
         # normalize gradients
-        for p in self.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size)
+        if self.fast_version:
+            pass
+            # for p in self.parameters():
+            #     p.grad.data.mul_(1.0 / self._cur_batch_size)
+        else:
+            for p in self.parameters():
+                p.grad.data.mul_(1.0 / self._cur_batch_size)
                 
         self._opt.step()
         if self.trainer.is_last_batch:
@@ -211,9 +263,6 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
 
     def backward(self, loss: Tensor, *args: Any, **kwargs: Any) -> None:
         super().backward(loss, *args, **kwargs)
-        
-        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.maml.parameters()]
-        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.inr.parameters()]
     
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
