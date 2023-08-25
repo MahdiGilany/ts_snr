@@ -77,7 +77,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        adaptation_steps: int = 50,
+        adaptation_steps: int = 15,
         batch_size: int = 256,
         fast_version: bool = False,
         reset_linears: bool = False,
@@ -100,7 +100,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             fc = nn.Linear(layer_size, 1)
 
         self.maml = l2l.algorithms.MAML(fc,
-                                        lr=0.1,
+                                        lr=0.01,
                                         first_order=False
                                         )
         

@@ -31,18 +31,39 @@ logger = get_logger(__name__)
 class linears(nn.Module):
     def __init__(self, in_feats, out_feats, no_parallel_fc, bias=True):
         super().__init__()
-        self.list_fc = [nn.Linear(in_feats, out_feats, bias=bias) for _ in range(no_parallel_fc)]
-        self.list_fc = nn.ModuleList(self.list_fc)
-    
+        # self.list_fc = [nn.Linear(in_feats, out_feats, bias=bias) for _ in range(no_parallel_fc)]
+        # self.list_fc = nn.ModuleList(self.list_fc)
+        self.in_feats = in_feats
+        self.out_feats = out_feats
+        self.no_parallel_fc = no_parallel_fc
+        self.weights = nn.Parameter(torch.randn(no_parallel_fc, in_feats, out_feats), requires_grad=True)
+        self.biases = nn.Parameter(torch.randn(no_parallel_fc, 1, out_feats), requires_grad=True)
+        # self.weights = nn.Parameter(torch.randn(in_feats, out_feats), requires_grad=True)
+        # self.biases = nn.Parameter(torch.randn(1, out_feats), requires_grad=True)
+        self.reset_parameters()
+        
     def forward(self, x):
         batch_size = x.shape[0]
-        assert (batch_size <= len(self.list_fc)), "batch_size must be less or equal than the number of parallel fc layers"
-        return torch.cat([self.list_fc[i](x[i:i+1]) for i in range(batch_size)], dim=0)
+        assert (batch_size <= self.weights.shape[0]), "batch_size must be less or equal than the number of parallel fc layers"
+        out = x @ self.weights[:batch_size,...] + self.biases[:batch_size,...]
+        return out
+        # weights = repeat(self.weights[None,...], '1 i o -> b i o', b=batch_size)
+        # biases = repeat(self.biases[None,...], '1 i o -> b i o', b=batch_size)
+        # return x @ weights + biases
+        # assert (batch_size <= len(self.list_fc)), "batch_size must be less or equal than the number of parallel fc layers"
+        # return torch.cat([self.list_fc[i](x[i:i+1]) for i in range(batch_size)], dim=0)
         
     def reset_parameters(self):
-        for fc in self.list_fc:
-            fc.reset_parameters()
-    
+        # for fc in self.list_fc:
+        #     fc.reset_parameters()
+        # torch.nn.init.xavier_uniform_(self.weights)
+        for i in range (self.no_parallel_fc):
+            torch.nn.init.kaiming_uniform_(self.weights[i,...], a=math.sqrt(5))
+            if self.biases is not None:
+                fan_in, _ = torch.nn.init._calculate_fan_in_and_fan_out(self.weights[i,...])
+                bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
+                torch.nn.init.uniform_(self.biases[i,...], -bound, bound)
+                
 class _DeepTIMeModelReptile(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
@@ -58,6 +79,8 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         use_datetime: bool = False,
         adaptation_steps: int = 15,
         batch_size: int = 256,
+        fast_version: bool = False,
+        reset_linears: bool = False,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -69,7 +92,10 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        self.fc = nn.Linear(layer_size, 1)
+        if fast_version:
+            self.fc = linears(layer_size, 1, batch_size)
+        else:
+            self.fc = nn.Linear(layer_size, 1)
         
         self.adaptation_steps = adaptation_steps
         self.output_chunk_length = forecast_horizon_length
@@ -78,6 +104,8 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.fast_version = fast_version
+        self.reset_linears = reset_linears # reseting linear heads for 
         self.val=True
         
         self.nr_params = nr_params
@@ -132,52 +160,82 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         for p in self.fc.parameters():
             p.grad = torch.zeros_like(p.data)
         
-        
         linear_errors = []
-        preds = []
-        # losses = []
-        for i in range(batch_size):
+        if self.fast_version:
             inr_model = deepcopy(self.inr)
-            linear_model = deepcopy(self.fc)
-            linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
+            linears_model = deepcopy(self.fc)
+            linear_error = self.fast_adapt(linears_model, lookback_reprs, x, adaptation_steps=self.adaptation_steps)
             linear_errors.append(linear_error)
-            
+
             if not self.val:
                 # reptile update for self.fc
-                for p, l in zip(self.fc.parameters(), linear_model.parameters()):
+                for p, l in zip(self.fc.parameters(), linears_model.parameters()):
                     p.grad.data.add_(-1.0, l.data)
-            
+                    
                 # update inr model
-                # sd = self._opt.state_dict()
-                # lr = sd['param_groups'][2]['lr']
                 lr = self.lr_schedulers().get_lr()[-1]
                 optimizer = self.reptile_optimizers(inr_model.named_parameters(), lr=lr)
                 # optimizer.load_state_dict(self._opt.state_dict())
                 optimizer.zero_grad()
-                loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len]))[...,None], x[i:i+1,...])            
+                _coords = repeat(coords[:, :-tgt_horizon_len], '1 t d -> b t d', b=batch_size)
+                loss = self._compute_loss(linears_model(inr_model(_coords))[...,None], x)            
                 loss.backward()
                 optimizer.step()            
                 
                 # reptile update for self.inr
                 for p, l in zip(self.inr.parameters(), inr_model.parameters()):
                     p.grad.data.add_(-1.0, l.data)
+                
+                
+            w = linears_model.weights.detach()
+            b = linears_model.biases.detach()
             
-            # loss = self._compute_loss(lookback_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach(), x[i:i+1,...])            
-            # losses.append(loss)
-            
-            try:
-                w = linear_model.weight[..., None].detach()
-                b = linear_model.bias.detach()
-            except:
-                w = linear_model.module.weight[..., None].detach()
-                b = linear_model.module.bias.detach()
-            
-            pred = horizon_reprs[i:i+1,...] @ w + b
-            preds.append(pred)
-            
-        preds = torch.cat(preds, dim=0)
-        # losses = torch.stack(losses, dim=0).mean()
-        
+            preds = horizon_reprs @ w[:batch_size,...] + b[:batch_size,...]
+
+        else:
+            preds = []
+            # losses = []
+            for i in range(batch_size):
+                inr_model = deepcopy(self.inr)
+                linear_model = deepcopy(self.fc)
+                linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
+                linear_errors.append(linear_error)
+                
+                if not self.val:
+                    # reptile update for self.fc
+                    for p, l in zip(self.fc.parameters(), linear_model.parameters()):
+                        p.grad.data.add_(-1.0, l.data)
+                
+                    # update inr model
+                    # sd = self._opt.state_dict()
+                    # lr = sd['param_groups'][2]['lr']
+                    lr = self.lr_schedulers().get_lr()[-1]
+                    optimizer = self.reptile_optimizers(inr_model.named_parameters(), lr=lr)
+                    # optimizer.load_state_dict(self._opt.state_dict())
+                    optimizer.zero_grad()
+                    loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len]))[...,None], x[i:i+1,...])            
+                    loss.backward()
+                    optimizer.step()            
+                    
+                    # reptile update for self.inr
+                    for p, l in zip(self.inr.parameters(), inr_model.parameters()):
+                        p.grad.data.add_(-1.0, l.data)
+                
+                # loss = self._compute_loss(lookback_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach(), x[i:i+1,...])            
+                # losses.append(loss)
+                
+                try:
+                    w = linear_model.weight[..., None].detach()
+                    b = linear_model.bias.detach()
+                except:
+                    w = linear_model.module.weight[..., None].detach()
+                    b = linear_model.module.bias.detach()
+                
+                pred = horizon_reprs[i:i+1,...] @ w + b
+                preds.append(pred)
+                
+            preds = torch.cat(preds, dim=0)
+            # losses = torch.stack(losses, dim=0).mean()
         
         self.learned_w = w[...,0] # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
         
@@ -195,7 +253,6 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
     # def _compute_regularization_loss(self, x_in: torch.Tensor):
     #     x = x_in[0]
     #     self._compute_loss()
-    
     
     def training_step(self, train_batch, batch_idx) -> torch.Tensor:
         """performs the training step"""
@@ -229,10 +286,15 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.train_metrics)
         
         # normalize gradients
-        for p in self.fc.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
-        for p in self.inr.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        if self.fast_version:
+            pass
+            # for p in self.parameters():
+            #     p.grad.data.mul_(1.0 / self._cur_batch_size)
+        else:
+            for p in self.fc.parameters():
+                p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+            for p in self.inr.parameters():
+                p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
         
         # backward pass for inr
         self.manual_backward(loss) #or loss.backward()
@@ -260,9 +322,6 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
 
     def backward(self, loss: Tensor, *args: Any, **kwargs: Any) -> None:
         super().backward(loss, *args, **kwargs)
-        
-        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.maml.parameters()]
-        # [p.grad.data.mul_(1.0 / (self._cur_batch_size)) for p in self.inr.parameters()]
     
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
