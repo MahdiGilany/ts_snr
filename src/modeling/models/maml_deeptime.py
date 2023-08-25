@@ -69,18 +69,13 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        self.fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
-        # self.fc = L2(nn.Linear(layer_size, 1), self.reg_coeff()) # for now accepts 1-dimensional targets only
+        fc = nn.Linear(layer_size, 1) # for now accepts 1-dimensional targets only
         # fcs = linears(layer_size, 1, batch_size)
-        # self.maml = l2l.algorithms.MAML(fcs,
-        #                                 lr=0.5,
-        #                                 first_order=False
-        #                                 )
+        self.maml = l2l.algorithms.MAML(fc,
+                                        lr=0.01,
+                                        first_order=False
+                                        )
         
-        
-        
-
-        # self.adaptive_weights = RidgeRegressor()
         self.adaptation_steps = adaptation_steps
         self.output_chunk_length = forecast_horizon_length
         self.datetime_feats = datetime_feats
@@ -93,73 +88,30 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self.nr_params = nr_params
         self.use_datetime = use_datetime
 
-    # # MAML fast adapt
-    # def fast_adapt(self, base_learner, x, y, adaptation_steps=1):
-    #     # self.maml.train()
-    #     loss = nn.MSELoss()
-        
-    #     # define weights and biases every time
-    #     # w, b = torch.tensor()
-    #     # init.kaiming_uniform_(w, a=math.sqrt(5))
-    #     # if self.bias is not None:
-    #     #     fan_in, _ = init._calculate_fan_in_and_fan_out(self.weight)
-    #     #     bound = 1 / math.sqrt(fan_in) if fan_in > 0 else 0
-    #     #     init.uniform_(self.bias, -bound, bound)
-        
-    #     # Adapt the model
-    #     for step in range(adaptation_steps):
-    #         # allow_nograd=False
-    #         if self.val:
-    #         #     # breakpoint()
-    #         #     x.requires_grad_(True)
-    #         #     # y.requires_grad_(True)
-    #         #     allow_nograd = True
-    #             [p.requires_grad_(True) for p in base_learner.parameters()]
-    #             x = x.detach().clone().requires_grad_(True)
-    #         with torch.enable_grad():
-    #             # breakpoint()
-    #             l2_reg = torch.tensor(0., device=x.device, dtype=x.dtype)
-    #             for param in base_learner.parameters():
-    #                 l2_reg += torch.norm(param)**2
-    #             # l2_reg = torch.sum([p.norm(p=2)**2 for p in base_learner.parameters()])
-    #             # train_error = loss(base_learner(x), y) + self.reg_coeff()*torch.norm(fc_w, p=2)**2
-    #             train_error = loss(base_learner(x), y) #+ self.reg_coeff()*l2_reg
-    #             # breakpoint()
-    #             base_learner.adapt(train_error, allow_unused=True)# allow_nograd=allow_nograd)
-    #             if not self.val:
-    #                 try:
-    #                     wandb.log({'MAML/train_error': train_error, 'MAML/l2_reg': l2_reg})
-    #                 except:
-    #                     pass
-    
-    # reptile fast adapt
+    # MAML fast adapt
     def fast_adapt(self, base_learner, x, y, adaptation_steps=1):
-        optimizer = torch.optim.SGD(base_learner.parameters(), 0.01)
         loss = nn.MSELoss()
-        
-        # this ensures that inr is not affected by the adaptation
-        x = x.detach().clone().requires_grad_(True)
         
         # this ensures that in meta validation, the weights are still updated 
         if self.val:
+            # this ensures that inr is not affected by the adaptation
+            x = x.detach().clone().requires_grad_(True)
             [p.requires_grad_(True) for p in base_learner.parameters()]
         
         
         # turns torch.no_grad() off in meta validation
         with torch.enable_grad():
             for step in range(adaptation_steps):
-                optimizer.zero_grad()
                 _reg = torch.tensor(0., device=x.device, dtype=x.dtype)
                 for param in base_learner.parameters():
                     _reg += torch.norm(param)**2 #L2
                     # _reg += torch.abs(param).sum() #L1
                 train_error = loss(base_learner(x), y) + self.reg_coeff()*_reg
-                train_error.backward()
-                optimizer.step()
+                base_learner.adapt(train_error) #, allow_unused=True)
         
         return train_error.item()
     
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:        
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor:
         x = x_in[0]
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, outdim = x.shape
@@ -172,74 +124,32 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
         
-        # # MAML
-        # self.maml.module.reset_parameters()
-        # base_learner = self.maml.clone()
-        # self.fast_adapt(base_learner, lookback_reprs, x, adaptation_steps=self.adaptation_steps)
-        
-        # preds = base_learner(horizon_reprs)
-        
-        
-        # Reptile
-        self.lookback_reprs = lookback_reprs
-        
         # zero-grad the parameters
-        for p in self.inr.parameters():
+        for p in self.parameters():
             p.grad = torch.zeros_like(p.data)
-        for p in self.fc.parameters():
-            p.grad = torch.zeros_like(p.data)
-        
-        
+
         linear_errors = []
         preds = []
-        # losses = []
         for i in range(batch_size):
-            inr_model = deepcopy(self.inr)
-            linear_model = deepcopy(self.fc)
+            linear_model = self.maml.clone() # head of the model
             linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
             linear_errors.append(linear_error)
             
+            pred = linear_model(horizon_reprs[i:i+1,...])
             if not self.val:
-                # reptile update for self.fc
-                for p, l in zip(self.fc.parameters(), linear_model.parameters()):
-                    p.grad.data.add_(-1.0, l.data)
+                loss = self._compute_loss(pred, self.y[i:i+1,...])
+                self.manual_backward(loss)
+            preds.append(pred.detach()) # no backward from this point so detach
             
-                # update inr model
-                # sd = self._opt.state_dict()
-                # lr = sd['param_groups'][2]['lr']
-                lr = self.lr_schedulers().get_lr()[-1]
-                optimizer = self.reptile_optimizers(inr_model.named_parameters(), lr=lr)
-                # optimizer.load_state_dict(self._opt.state_dict())
-                optimizer.zero_grad()
-                loss = self._compute_loss(linear_model(inr_model(coords[:, :-tgt_horizon_len]))[...,None], x[i:i+1,...])            
-                loss.backward()
-                optimizer.step()            
-                
-                # reptile update for self.inr
-                for p, l in zip(self.inr.parameters(), inr_model.parameters()):
-                    p.grad.data.add_(-1.0, l.data)
+            # for visualization
+            w = linear_model.weight[..., None].detach()
+            b = linear_model.bias.detach()
             
-            # loss = self._compute_loss(lookback_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach(), x[i:i+1,...])            
-            # losses.append(loss)
-            
-            try:
-                w = linear_model.weight[..., None].detach()
-                b = linear_model.bias.detach()
-            except:
-                w = linear_model.module.weight[..., None].detach()
-                b = linear_model.module.bias.detach()
-            
-            pred = horizon_reprs[i:i+1,...] @ w + b
-            preds.append(pred)
-            
+
         preds = torch.cat(preds, dim=0)
-        # losses = torch.stack(losses, dim=0).mean()
         
-        
+        # for visualization
         self.learned_w = w[...,0] # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
-        
-        
-        
         try: 
             wandb.log({'goodness_of_base_fit': np.mean(linear_errors)})
         except:
@@ -248,20 +158,15 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )
-        return preds  #, losses
-    
-    # def _compute_regularization_loss(self, x_in: torch.Tensor):
-    #     x = x_in[0]
-    #     self._compute_loss()
-    
-    
-    
+        return preds
+
     def training_step(self, train_batch, batch_idx) -> torch.Tensor:
         """performs the training step"""
         # manual optimization
         self._opt = self.optimizers()
         self._opt.zero_grad()
         
+        # tricks
         self.val = False
         self.y = train_batch[-1]
         
@@ -269,18 +174,10 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         target = train_batch[
             -1
         ]  # By convention target is always the last element returned by datasets
-        _loss = self._compute_loss(output, target)
-        loss = _loss #+ lkbk_loss #+ self._compute_regularization_loss(train_batch[:-1])
-        # self.log(
-        #     "train_reg_loss",
-        #     loss,
-        #     batch_size=train_batch[0].shape[0],
-        #     prog_bar=True,
-        #     sync_dist=True,
-        # )
+        loss = self._compute_loss(output, target)
         self.log(
             "train_loss",
-            _loss,
+            loss,
             batch_size=train_batch[0].shape[0],
             prog_bar=True,
             sync_dist=True,
@@ -288,14 +185,9 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.train_metrics)
         
         # normalize gradients
-        for p in self.fc.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
-        for p in self.inr.parameters():
-            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
-        
-        # backward pass for inr
-        self.manual_backward(loss) #or loss.backward()
-        
+        for p in self.parameters():
+            p.grad.data.mul_(1.0 / self._cur_batch_size)
+                
         self._opt.step()
         if self.trainer.is_last_batch:
             self.lr_schedulers().step()
@@ -398,35 +290,6 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             }
         else:
             return optimizer
-    
-    def reptile_optimizers(self, reptile_params, lr=0.01):
-        # self.super().configure_optimizers()
-        """configures optimizers and learning rate schedulers for model optimization."""
-
-        # Create the optimizer and (optionally) the learning rate scheduler
-        # we have to create copies because we cannot save model.parameters into object state (not serializable)
-        optimizer_kws = {k: v for k, v in self.optimizer_kwargs.items()}
-        
-        no_decay_list = ('bias', 'norm',)
-        group1_params = []  # lambda
-        group2_params = []  # no decay
-        group3_params = []  # decay
-        for param_name, param in reptile_params:
-            if '_lambda' in param_name:
-                group1_params.append(param)
-            elif any([mod in param_name for mod in no_decay_list]):
-                group2_params.append(param)
-            else:
-                group3_params.append(param)
-        
-        list_params = [
-            {'params': group1_params, 'weight_decay': 0, 'lr': 1.0, 'scheduler': 'cosine_annealing'},
-            {'params': group2_params, 'weight_decay': 0, 'lr': lr},
-            {'params': group3_params, 'lr': lr}
-            ]
-        optimizer: torch.optim.optimizer.Optimizer = self.optimizer_cls(list_params, **optimizer_kws)
-    
-        return optimizer
  
     def reg_coeff(self) -> Tensor:
         return F.softplus(self._lambda)

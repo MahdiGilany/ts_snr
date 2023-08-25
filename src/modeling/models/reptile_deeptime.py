@@ -110,7 +110,7 @@ class _DeepTIMeModelReptile(PLPastCovariatesModule):
         
         return train_error.item()
     
-    def forward(self, x_in: torch.Tensor) -> torch.Tensor:        
+    def forward(self, x_in: torch.Tensor) -> torch.Tensor: 
         x = x_in[0]
         tgt_horizon_len = self.output_chunk_length
         batch_size, lookback_len, outdim = x.shape
