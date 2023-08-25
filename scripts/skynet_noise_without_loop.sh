@@ -2,8 +2,8 @@
 
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
-#SBATCH --time=1-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti07,compute1080ti08,compute1080ti10
+#SBATCH --time=3-01:00:00
+#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -27,20 +27,17 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=baseline
+version=Slurm_OT
 experiment="exp_default"
 model_name="deeptime"
 seed=0
 batch_size=256
 epochs=100
 lr=0.001
-patience=10
 dataset_name="etth2"
-
 # only for crypto
 crypto_name="Bitcoin"
 prct_rows_to_load=0.1
-
 noise_type="gaussian"
 noise_std=0
 target_series_index=-1
@@ -63,6 +60,7 @@ done
 
 # run experiment
 # python scripts/test.py
+rand_seed=$((seed)) # + SLURM_JOB_ID)) # no random seed for now
 
 # set name, group, and input chunk length
 if [ $input_chunk_length == -1 ]
@@ -70,14 +68,12 @@ then
     input_chunk_length=$((output_chunk_length * multiple))
 fi
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_${noise_type}_std${noise_std}_v${version}"
-name="${group}_seed${seed}"
+name="${group}_seed${rand_seed}"
 
-# group=null
-
-echo "seed ${seed} and noise std ${noise_std} model_name ${model_name}"
+echo "seed ${rand_seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
             experiment=$experiment\
-            seed=$seed\
+            seed=$rand_seed\
             batch_size=$batch_size\
             epochs=$epochs\
             new_dir=$new_dir\
@@ -91,9 +87,10 @@ python main.py name=$name\
             data.noise_type=$noise_type\
             data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
-            callbacks.early_stopping.patience=$patience\
             logger.wandb.group=$group\
             verbose=$verbose\
             id=$SLURM_JOB_ID
+done
+done
 
 echo "DONE"
