@@ -65,7 +65,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         # activating manual optimization
         self.automatic_optimization = False
         
-        self._lambda = nn.Parameter(torch.as_tensor(0.0, dtype=torch.float), requires_grad=False)
+        self._lambda = nn.Parameter(torch.as_tensor(0.0, dtype=torch.float), requires_grad=True)
         
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
@@ -151,7 +151,8 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 optimizer.zero_grad()
                 _reg = torch.tensor(0., device=x.device, dtype=x.dtype)
                 for param in base_learner.parameters():
-                    _reg += torch.norm(param)**2
+                    _reg += torch.norm(param)**2 #L2
+                    # _reg += torch.abs(param).sum() #L1
                 train_error = loss(base_learner(x), y) + self.reg_coeff()*_reg
                 train_error.backward()
                 optimizer.step()
@@ -222,18 +223,20 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             # losses.append(loss)
             
             try:
-                pred = horizon_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach()
+                w = linear_model.weight[..., None].detach()
+                b = linear_model.bias.detach()
             except:
-                pred = horizon_reprs[i:i+1,...] @ linear_model.module.weight[..., None].detach() + linear_model.module.bias.detach()
+                w = linear_model.module.weight[..., None].detach()
+                b = linear_model.module.bias.detach()
+            
+            pred = horizon_reprs[i:i+1,...] @ w + b
             preds.append(pred)
             
         preds = torch.cat(preds, dim=0)
         # losses = torch.stack(losses, dim=0).mean()
         
         
-
-        w = 0*lookback_reprs[:,0,:] #next(self.maml.parameters())
-        self.learned_w = w # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        self.learned_w = w[...,0] # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
         
         
         
