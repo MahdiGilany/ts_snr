@@ -184,6 +184,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         
         linear_errors = []
         preds = []
+        # losses = []
         for i in range(batch_size):
             inr_model = deepcopy(self.inr)
             linear_model = deepcopy(self.fc)
@@ -210,10 +211,14 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 for p, l in zip(self.inr.parameters(), inr_model.parameters()):
                     p.grad.data.add_(-1.0, l.data)
             
+            # loss = self._compute_loss(lookback_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach(), x[i:i+1,...])            
+            # losses.append(loss)
+            
             pred = horizon_reprs[i:i+1,...] @ linear_model.weight[..., None].detach() + linear_model.bias.detach()
             preds.append(pred)
             
         preds = torch.cat(preds, dim=0)
+        # losses = torch.stack(losses, dim=0).mean()
         
         
 
@@ -230,7 +235,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         preds = preds.view(
             preds.shape[0], self.output_chunk_length, preds.shape[2], self.nr_params
         )
-        return preds
+        return preds  #, losses
     
     # def _compute_regularization_loss(self, x_in: torch.Tensor):
     #     x = x_in[0]
@@ -252,7 +257,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             -1
         ]  # By convention target is always the last element returned by datasets
         _loss = self._compute_loss(output, target)
-        loss = _loss #+ self._compute_regularization_loss(train_batch[:-1])
+        loss = _loss #+ lkbk_loss #+ self._compute_regularization_loss(train_batch[:-1])
         # self.log(
         #     "train_reg_loss",
         #     loss,
@@ -270,10 +275,10 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self._calculate_metrics(output, target, self.train_metrics)
         
         # normalize gradients
-        # for p in self.fc.parameters():
-        #     p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
-        # for p in self.inr.parameters():
-        #     p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        for p in self.fc.parameters():
+            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
+        for p in self.inr.parameters():
+            p.grad.data.mul_(1.0 / self._cur_batch_size).add_(p.data)
         
         # backward pass for inr
         self.manual_backward(loss) #or loss.backward()
