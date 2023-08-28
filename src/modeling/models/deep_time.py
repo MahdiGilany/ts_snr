@@ -71,7 +71,8 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         else:
             time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
-        time_reprs = time_reprs/torch.norm(time_reprs, dim=1, keepdim=True)
+        self.time_reprs = time_reprs
+        # time_reprs = time_reprs/torch.norm(time_reprs, dim=1, keepdim=True)
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
         
@@ -130,6 +131,32 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         )
         return preds
 
+    def _compute_regularization_loss(self) -> torch.Tensor:
+        """Computes the regularization loss."""
+        return 0.05*self.time_reprs.norm(dim=1).mean()
+
+    def training_step(self, train_batch, batch_idx) -> torch.Tensor:
+        """performs the training step"""
+        # tricks
+        self.val = False
+        self.y = train_batch[-1]
+        
+        output = self._produce_train_output(train_batch[:-1])
+        target = train_batch[
+            -1
+        ]  # By convention target is always the last element returned by datasets
+        loss = self._compute_loss(output, target)
+        loss = loss + self._compute_regularization_loss()
+        self.log(
+            "train_loss",
+            loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.train_metrics)
+        return loss
+    
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
 

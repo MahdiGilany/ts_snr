@@ -78,9 +78,11 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
         adaptation_steps: int = 15,
+        adaptation_lr: float = 0.01,
         batch_size: int = 256,
         fast_version: bool = False,
         reset_linears: bool = False,
+        L1: bool = False,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -100,7 +102,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             fc = nn.Linear(layer_size, 1)
 
         self.maml = l2l.algorithms.MAML(fc,
-                                        lr=0.01,
+                                        lr=adaptation_lr,
                                         first_order=False
                                         )
         
@@ -113,6 +115,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
         self.scales = scales
         self.fast_version = fast_version
         self.reset_linears = reset_linears # reseting linear heads for 
+        self.L1 = L1 
         self.val=True
         
         self.nr_params = nr_params
@@ -134,8 +137,10 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
             for step in range(adaptation_steps):
                 _reg = torch.tensor(0., device=x.device, dtype=x.dtype)
                 for param in base_learner.parameters():
-                    _reg += torch.norm(param)**2 #L2
-                    # _reg += torch.abs(param).sum() #L1
+                    if not self.L1:
+                        _reg += torch.norm(param)**2 #L2
+                    else:
+                        _reg += torch.abs(param).sum() #L1
                 train_error = loss(base_learner(x), y) + self.reg_coeff()*_reg
                 base_learner.adapt(train_error) #, allow_unused=True)
         
@@ -177,6 +182,7 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 self.maml.module.reset_parameters()
         else:
             preds = []
+            ws = []
             for i in range(batch_size):
                 linear_model = self.maml.clone() # head of the model
                 linear_error = self.fast_adapt(linear_model, lookback_reprs[i:i+1,...], x[i:i+1,...], adaptation_steps=self.adaptation_steps)
@@ -191,9 +197,11 @@ class _DeepTIMeModelMAML(PLPastCovariatesModule):
                 # for visualization
                 w = linear_model.weight[..., None].detach()
                 b = linear_model.bias.detach()
+                ws.append(w)
                 
 
             preds = torch.cat(preds, dim=0)
+            w = torch.cat(ws, dim=0)
         
         # for visualization
         self.learned_w = w[...,0] # torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
@@ -354,6 +362,9 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         batch_size: int = 256,
+        adaptation_steps: int = 15,
+        adaptation_lr: float = 0.01,
+        L1: bool = False,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -368,6 +379,9 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
         self.batch_size = batch_size
+        self.adaptation_steps = adaptation_steps
+        self.adaptation_lr = adaptation_lr
+        self.L1 = L1
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -397,5 +411,8 @@ class DeepTIMeModelMAML(PastCovariatesTorchModel):
             nr_params=nr_params,
             use_datetime=use_datetime,
             batch_size=self.batch_size,
+            adaptation_steps=self.adaptation_steps,
+            adaptation_lr=self.adaptation_lr,
+            L1=self.L1,
             **self.pl_module_params,
             )
