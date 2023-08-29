@@ -2,8 +2,8 @@
 
 output_chunk_length=96
 noise_type="laplace"
-version=sparsity_benchmarking
-omp_version=sparsity_benchmarking
+version=sparsity_benchmarking_dictregul0.01
+omp_version=sparsity_benchmarking_multiplelookback
 
 # defaults
 crypto_name="Bitcoin"
@@ -12,45 +12,51 @@ crypto_name="Bitcoin"
 prct_rows_to_load=0.1
 
 # with loop over noise and seeds
-for model_name in  deeptime nbeats omp_deeptime naive_martingle mixture_experts_deeptime inrplay_deeptime # l1_deeptime vd_deeptime   
+for model_name in deeptime nbeats omp_deeptime naive_martingle mixture_experts_deeptime inrplay_deeptime mamlL1_deeptime #mamlL2_deeptime # vd_deeptime   
 do
     for dataset_name in etth2 exchange_rate traffic crypto 
     do
 
+        _output_chunk_length=$output_chunk_length
         # multiple
         if [ $dataset_name == "etth2" ]
         then
             multiple=3
             target_index=-1
-            n_nonzero_coefs=105
+            n_nonzero_coefs=15
+            output_chunk_length=$_output_chunk_length
         elif [ $dataset_name == "exchange_rate" ]
         then
             multiple=3
             target_index=-2
-            n_nonzero_coefs=45
+            n_nonzero_coefs=15
+            output_chunk_length=$_output_chunk_length
         elif [ $dataset_name == "traffic" ]
         then
             multiple=7
             target_index=-1
-            n_nonzero_coefs=105
+            n_nonzero_coefs=45
+            output_chunk_length=$_output_chunk_length
         elif [ $dataset_name == "crypto" ]
         then
             multiple=7
             target_index=-1
-            n_nonzero_coefs=45
-            output_chunk_length=15 # make sure crypto is the last dataset since changes state of output_chunk_length
+            n_nonzero_coefs=15
+            output_chunk_length=15
             # version=${version}_${crypto_name}_prct${prct_rows_to_load}
             # omp_version=${omp_version}_${crypto_name}_prct${prct_rows_to_load}
         else    
             multiple=7
             target_index=-1
             n_nonzero_coefs=45
+            output_chunk_length=$_output_chunk_length
         fi
 
 
         if [ $model_name == "omp_deeptime" ]
         then
-            # for n_nonzero_coefs in 2 5 10 15 45 75 105 135 #165 195 #225 255
+            # for multiple in 5 7 9 11
+            # for n_nonzero_coefs in 5 15 45 75 135 #165 195 #225 255
             # do
                 sbatch scripts/skynet_noise_OMP.sh version=$omp_version model_name=$model_name dataset_name=$dataset_name\
                 target_series_index=$target_index multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type\
@@ -66,6 +72,16 @@ do
             sbatch scripts/skynet_noise_MOE.sh version=$version model_name=$model_name dataset_name=$dataset_name target_series_index=$target_index\
             multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type K_value=$n_nonzero_coefs\
             crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load 
+        elif [ $model_name == "mamlL1_deeptime" ]
+        then
+            sbatch scripts/skynet_noise_L1.sh version=$version model_name="maml_deeptime" dataset_name=$dataset_name target_series_index=$target_index\
+            multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type K_value=$n_nonzero_coefs\
+            crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load L1=True adapt_steps=15 adapt_lr=0.01
+        elif [ $model_name == "mamlL2_deeptime" ]
+        then
+            sbatch scripts/skynet_noise_L1.sh version=$version model_name="maml_deeptime" dataset_name=$dataset_name target_series_index=$target_index\
+            multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type K_value=$n_nonzero_coefs\
+            crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load L1=False adapt_steps=15 adapt_lr=0.01
         else
             if [ $model_name == "nbeats" ] && [ $dataset_name == "exchange_rate" ]
             then
@@ -75,7 +91,7 @@ do
             else
                 sbatch scripts/skynet_noise.sh version=$version model_name=$model_name dataset_name=$dataset_name\
                 target_series_index=$target_index multiple=$multiple output_chunk_length=$output_chunk_length noise_type=$noise_type\
-                crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load 
+                crypto_name=$crypto_name prct_rows_to_load=$prct_rows_to_load #dict_reg_coef=0.01
             fi
 
         fi
