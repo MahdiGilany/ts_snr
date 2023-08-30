@@ -37,6 +37,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
+        dict_reg_coef: float = 0.05,
         **kwargs,
         ):
         super().__init__(**kwargs)
@@ -51,6 +52,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.dict_reg_coef = dict_reg_coef
         
         self.nr_params = nr_params
         self.use_datetime = use_datetime
@@ -133,7 +135,7 @@ class _DeepTIMeModule(PLPastCovariatesModule):
 
     def _compute_regularization_loss(self) -> torch.Tensor:
         """Computes the regularization loss."""
-        return 0.05*self.time_reprs.norm(dim=1).mean()
+        return self.dict_reg_coef*self.time_reprs.norm(dim=1).mean() # + 0.05*self.learned_w.abs().mean()
 
     def training_step(self, train_batch, batch_idx) -> torch.Tensor:
         """performs the training step"""
@@ -243,6 +245,7 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        dict_reg_coef: float = 0.05,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -256,6 +259,7 @@ class DeepTIMeModel(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.dict_reg_coef = dict_reg_coef
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -284,5 +288,6 @@ class DeepTIMeModel(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
+            dict_reg_coef=self.dict_reg_coef,
             **self.pl_module_params,
             )
