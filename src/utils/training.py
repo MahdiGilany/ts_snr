@@ -9,6 +9,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from typing import List, Optional, Union, Dict, Literal, Tuple
 import plotly.express as px
@@ -29,6 +30,9 @@ from darts.models.forecasting.forecasting_model import ForecastingModel, LocalFo
 from darts.utils.data.sequential_dataset import PastCovariatesSequentialDataset
 
 from tqdm import tqdm
+from einops import rearrange, repeat, reduce
+from ..modeling.modules.regressors import RidgeRegressor
+from ..modeling.modules.inr import INR
 
 
 
@@ -225,4 +229,240 @@ def manual_train_seq_model(
         
     return torch.load(f"./{seq_model.model_name}.pt")
         
-  
+
+class MetaDataset(Dataset):
+    def __init__(
+        self, 
+        timeseries_data: TimeSeries, 
+        num_shots: int = 5,
+        lookback: int = 24,
+        horizon: int = 12,
+        ) -> None:
+        super().__init__()
+        self.timeseries_data = timeseries_data._xa.values
+        self.num_shots = num_shots
+        self.lookback = lookback
+        self.horizon = horizon
+        
+    def __len__(self):
+        return len(self.timeseries_data) - self.lookback - 2*self.horizon - self.num_shots + 1
+    
+    def __getitem__(self, index):
+        seq_data = []
+        seq_label = []
+        for i in range(self.num_shots):
+            seq_data.append(self.timeseries_data[index+i:index+i+self.lookback])
+            seq_label.append(self.timeseries_data[index+i+self.lookback:index+i+self.lookback+self.horizon])
+        seq_data = np.stack(seq_data, axis=0)
+        seq_label = np.stack(seq_label, axis=0)
+        query_seq = self.timeseries_data[index+self.horizon+self.num_shots:index+self.lookback+self.horizon+self.num_shots]
+        query_label = self.timeseries_data[index+self.lookback+self.horizon+self.num_shots:index+self.lookback+2*self.horizon+self.num_shots]
+        return torch.tensor(seq_data).squeeze(-1), torch.tensor(seq_label).squeeze(-1), torch.tensor(query_seq).squeeze(-1), torch.tensor(query_label).squeeze(-1)
+
+
+class MetaDeepTime(nn.Module):
+    def __init__(self, horizon, inr=None, _lambda=None, val=False):
+        super().__init__()
+        self.inr = inr if inr is not None else INR(in_feats=1, layers=5, layer_size=256, n_fourier_feats=4096, scales=[0.01, 0.1, 1, 5, 10, 20, 50, 100])
+        self._lambda = _lambda
+        self.output_chunk_length = horizon
+        self.val = val
+        self.adaptive_weights = RidgeRegressor(lambda_init = _lambda if _lambda is not None else 0.)
+        
+    def forward(self, x):
+        tgt_horizon_len = self.output_chunk_length
+        batch_size, lookback_len, _ = x.shape
+        coords = self.get_coords(lookback_len, tgt_horizon_len).to(x.device, dtype=x.dtype)
+
+        time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
+
+        self.time_reprs = time_reprs
+        # time_reprs = time_reprs/torch.norm(time_reprs, dim=1, keepdim=True)
+        lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
+        horizon_reprs = time_reprs[:, -tgt_horizon_len:]
+        
+        # # reversible intrance normalization
+        # eps = 1e-5
+        # expectation = x.mean(dim=1, keepdim=True)
+        # standard_deviation = x.std(dim=1, keepdim=True) + eps
+        # x = (x - expectation) / standard_deviation
+        
+        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        preds = self.forecast(horizon_reprs, w, b)       
+        
+        # hack used for importance weights visualization (only first dim)
+        self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        
+        try: 
+            # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
+            goodness_of_base_fit = (x - torch.einsum('... d o, ... t d -> ... t o', [w, lookback_reprs]) + b).squeeze(-1).norm(dim=1).mean()
+            wandb.log({'goodness_of_base_fit': goodness_of_base_fit})
+            # wandb.log({'rel_norm_res': goodness_of_base_fit/x.squeeze(-1).norm(dim=1).mean()})
+        except:
+            pass
+        
+        # preds = preds.view(
+        #     preds.shape[0], preds.shape[1], preds.shape[2], 1
+        # )
+        return preds
+        
+    def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
+
+    def get_coords(self, lookback_len: int, horizon_len: int) -> torch.Tensor:
+        coords = torch.linspace(0, 1, lookback_len + horizon_len)
+        return rearrange(coords, 't -> 1 t 1')
+
+# MAML fast adapt
+def maml_fast_adapt(base_learner, x, y, val=False, adaptation_steps=1):
+    loss = nn.MSELoss()
+    
+    # this ensures that in meta validation, the weights are still updated 
+    if val:
+        # this ensures that inr is not affected by the adaptation
+        x = x.detach().clone().requires_grad_(True)
+        [p.requires_grad_(True) for p in base_learner.parameters()]
+    
+    
+    # turns torch.no_grad() off in meta validation
+    with torch.enable_grad():
+        for step in range(adaptation_steps):
+            # _reg = torch.tensor(0., device=x.device, dtype=x.dtype)
+            # for param in base_learner.parameters():
+            #     if not self.L1:
+            #         _reg += torch.norm(param)**2 #L2
+            #     else:
+                    # _reg += torch.abs(param).sum() #L1
+            train_error = loss(base_learner(x), y) #+ self.reg_coeff()*_reg
+            base_learner.adapt(train_error) #, allow_unused=True)
+    
+    return train_error.item()
+
+def manual_train_meta_deeptime(
+    meta_config: DictConfig,
+    input_chunk_length: int,
+    output_chunk_length: int,
+    meta_model: nn.Module,
+    data_series: DataSeries,
+    wandb_log: bool = False,
+    ):
+    # create a dataset and data loader
+    train_data = data_series.train_series
+    val_data = data_series.val_series
+    
+    train_ds = MetaDataset(train_data, num_shots=meta_config.num_shots, lookback=input_chunk_length, horizon=output_chunk_length)
+    val_ds = MetaDataset(val_data, num_shots=meta_config.num_shots, lookback=input_chunk_length, horizon=output_chunk_length)
+    
+    train_dl = DataLoader(
+            train_ds,
+            batch_size=meta_config.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=False,
+            )
+    
+    val_dl = DataLoader(
+            val_ds,
+            batch_size=meta_config.batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=False,
+            )
+    
+    
+    # train the model
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    meta_model = meta_model.to(device=device, dtype=train_ds[0][0].dtype)
+    
+    # maml model
+    import learn2learn as l2l
+    maml_model = l2l.algorithms.MAML(meta_model,
+                                    lr=meta_config.adapt_lr,
+                                    first_order=False
+                                    )
+    
+    for name, param in maml_model.named_parameters():
+        if param.requires_grad:
+            print(name, param.shape)
+    
+    optimizer = torch.optim.AdamW(meta_model.parameters(), lr=meta_config.lr)
+    criterion = nn.MSELoss()
+    
+    best_val_loss = np.inf
+    early_stop_counter = 0
+    for epoch in tqdm(range(meta_config.epochs), desc="Training meta model"):
+        # training
+        maml_model.train()
+        for batch in train_dl:
+            optimizer.zero_grad()
+            
+            support_seqs, support_labels, query_seqs, query_labels = batch
+            support_seqs = support_seqs.to(device)
+            support_labels = support_labels.to(device)
+            query_seqs = query_seqs.to(device)
+            query_labels = query_labels.to(device)
+            
+            batch_size = support_seqs.shape[0]
+            
+            train_errors = []
+            losses = []
+            for i in range(batch_size):
+                cloned_maml_model = maml_model.clone() # head of the model
+                # fast adapt
+                train_error = maml_fast_adapt(cloned_maml_model, support_seqs[i], support_labels[i], adaptation_steps=meta_config.adapt_steps)
+                train_errors.append(train_error)
+                #meta test
+                pred = cloned_maml_model(query_seqs[i:i+1])
+                loss = criterion(pred, query_labels[i:i+1])
+                loss.backward(retain_graph=True)
+                losses.append(loss.item())    
+            
+            for p in maml_model.parameters():
+                p.grad.data.mul_(1.0 / batch_size)
+            optimizer.step()
+
+            if wandb_log:
+                wandb.log({"Meta/train_adapt_errors": np.mean(train_errors), "Meta/train_loss": np.mean(losses)})
+        
+        
+        # validation
+        maml_model.eval()
+        losses = []
+        early_stop_counter += 1
+        with torch.no_grad():
+            for batch in val_dl:
+                support_seqs, support_labels, query_seqs, query_labels = batch
+                support_seqs = support_seqs.to(device)
+                support_labels = support_labels.to(device)
+                query_seqs = query_seqs.to(device)
+                query_labels = query_labels.to(device)
+                
+                batch_size = support_seqs.shape[0]
+                
+                train_errors = []
+                for i in range(batch_size):
+                    cloned_maml_model = maml_model.clone() # head of the model
+                    # fast adapt
+                    train_error = maml_fast_adapt(cloned_maml_model, support_seqs[i], support_labels[i], val=True, adaptation_steps=meta_config.adapt_steps)
+                    train_errors.append(train_error)
+                    #meta test
+                    pred = cloned_maml_model(query_seqs[i:i+1])
+                    loss = criterion(pred, query_labels[i:i+1])
+                    losses.append(loss.item())  
+                    if wandb_log:
+                        wandb.log({"Meta/val_adapt_errors": np.mean(train_errors)})
+                    
+            avg_loss = np.mean(losses)
+            if wandb_log:
+                wandb.log({"Meta/val_loss": avg_loss})
+            if avg_loss < best_val_loss:
+                early_stop_counter = 0
+                best_val_loss = avg_loss
+                torch.save(maml_model, f"./{meta_config.name}.pt")
+            if early_stop_counter > meta_config.patience:
+                log.info("Early stopping")
+                return torch.load(f"./{meta_config.name}.pt")
+        
+    return torch.load(f"./{meta_config.name}.pt")

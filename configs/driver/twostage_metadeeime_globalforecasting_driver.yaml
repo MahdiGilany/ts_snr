@@ -1,0 +1,25 @@
+
+# @package _global_
+# first line means that this config is for global use, e.g., configs.logger instead of configs.driver.logger
+_recursive_: false # recursive instantiation while using hydra.util.instantiate. 
+#https://hydra.cc/docs/advanced/instantiate_objects/overview/#recursive-instantiation 
+
+defaults:
+  - driver_default
+  - /trainer: trainer_default 
+  - /callbacks: callbacks_default
+
+driver:
+  _target_: hydra.utils.get_method
+  path: src.driver.drivers.darts_twostage_metadeeptime_globalforecasting_driver_run
+
+model:
+  meta_config:
+    batch_size: ${batch_size}
+    epochs: ${epochs}
+    lr: ${model.optimizer_kwargs.lr}
+    adapt_steps: 15
+    adapt_lr: 0.01 # ${model.optimizer_kwargs.lr}
+    patience: ${callbacks.early_stopping.patience}
+    name: ${name}
+    num_shots: 5

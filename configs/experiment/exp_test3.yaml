@@ -2,12 +2,15 @@
 
 defaults:
   - exp_default
+  - override /driver: twostage_metadeeime_globalforecasting_driver
   
-name: NeRFinrplay_deeptime_exchange_noise0.9_laplace_infeat128_layersize256_outfeat256_inrlayers5_in288_out96_Nfreq5_noclamp
+name: meta_deeptime_exchange_noise0._laplace_layersize256_in288_out96
 epochs: 100
 batch_size: 256
 seed: 0
 save_checkpoints: true
+
+resume_run: True
 
 trainer:
   check_val_every_n_epoch: 1
@@ -17,22 +20,22 @@ trainer:
 data:
   dataset_name: exchange_rate
   # split_ratio: [0.15, 0.05, 0.05]
-  noise_std: 0.9 # 0.1
+  noise_std: 0. # 0.1
   noise_type: laplace
   target_series_index: -2
   # prct_rows_to_load: .1
   # crypto_name: Bitcoin
 
 model:
-  model_name: inrplay_deeptime
+  model_name: deeptime
   output_chunk_length: 96
   input_chunk_length: 288
   # K: 100
   # omp_tolerance: 0.001
   # n_nonzero_coefs: 45
-  layer_size: 256
-  out_features: 256
-  inr_layers: 5
+  # layer_size: 256
+  # out_features: 256
+  # inr_layers: 5
   # optimizer_kwargs: 
   #   lr: 0.0001
 
