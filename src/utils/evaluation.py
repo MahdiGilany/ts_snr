@@ -725,7 +725,7 @@ def historical_forecasts_with_metadeeptime_manual(
         query_seqs = query_seqs.to(device)
         query_labels = query_labels.to(device)
         
-        batch_size = support_seqs.shape[0]
+        batch_size, num_shots, lookback, outdim = support_seqs.shape
         
         ## turn on for MAML
         # train_errors = []
@@ -740,18 +740,31 @@ def historical_forecasts_with_metadeeptime_manual(
         #     targets.append(query_labels[i:i+1].detach().cpu())
         
         ## turn on for closedform meta deeptime
-        for i in range(batch_size):
-            # fast adapt
-            support_latent = model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
-            support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
-            support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
-            W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
+        # fast adapt
+        support_latent = model(support_seqs.reshape(-1, lookback, outdim)).reshape(batch_size, num_shots, -1) # (batch_size, shots, horizon)
+        support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (batch_size, horizon, horizon)
+        support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels.squeeze(-1)) # (batch_size, horizon, horizon)
+        support_latentTsupport_latent.diagonal(dim1=-2, dim2=-1).add_(0.6)
+        W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (batch_size, horizon, horizon)
+        
+        #meta test
+        query_latent = model(query_seqs).squeeze(-1).reshape(batch_size, 1, -1) # (batch_size, 1, horizon)
+        pred = torch.matmul(query_latent, W_HH).transpose(1,2) # (batch_size, horizon, 1)
+        preds.append(pred.detach().cpu())
+        targets.append(query_labels.detach().cpu())
+        
+        # for i in range(batch_size):
+        #     # fast adapt
+        #     support_latent = model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+        #     support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+        #     support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+        #     W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
             
-            #meta test
-            query_latent = model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
-            pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
-            preds.append(pred)
-            targets.append(query_labels[i:i+1].detach().cpu())
+        #     #meta test
+        #     query_latent = model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+        #     pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+        #     preds.append(pred.detach().cpu())
+        #     targets.append(query_labels[i:i+1].detach().cpu())
 
 
     # preparing torch predictions and targets (not darts.timeseries predictions) 
