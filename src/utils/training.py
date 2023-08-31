@@ -541,6 +541,8 @@ def manual_train_meta_deeptime_closedform(
             support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels.squeeze(-1)) # (batch_size, horizon, horizon)
             support_latentTsupport_latent.diagonal(dim1=-2, dim2=-1).add_(0.6)
             W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (batch_size, horizon, horizon)
+            # W_HH.diagonal(dim1=-2, dim2=-1).add_(100.) # start from I
+            # W_HH = W_HH / 100.0
             
             #meta test
             query_latent = meta_model(query_seqs).squeeze(-1).reshape(batch_size, 1, -1) # (batch_size, 1, horizon)
@@ -588,6 +590,8 @@ def manual_train_meta_deeptime_closedform(
                 support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels.squeeze(-1)) # (batch_size, horizon, horizon)
                 support_latentTsupport_latent.diagonal(dim1=-2, dim2=-1).add_(0.6)
                 W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (batch_size, horizon, horizon)
+                # W_HH.diagonal(dim1=-2, dim2=-1).add_(100.)
+                # W_HH = W_HH / 100.0
                 
                 #meta test
                 query_latent = meta_model(query_seqs).squeeze(-1).reshape(batch_size, 1, -1) # (batch_size, 1, horizon)

@@ -22,4 +22,4 @@ model:
     adapt_lr: 0.01 # ${model.optimizer_kwargs.lr}
     patience: ${callbacks.early_stopping.patience}
     name: ${name}
-    num_shots: 5
+    num_shots: 1

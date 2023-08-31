@@ -4,13 +4,13 @@ defaults:
   - exp_default
   - override /driver: twostage_metadeeime_globalforecasting_driver
   
-name: meta_deeptime_exchange_noise0._laplace_layersize256_in288_out96
+name: meta_deeptime_exchange_noise0._laplace_layersize256_in288_out96_Deeptimeinit_lr1e-3_shots1 #_divideW100
 epochs: 100
 batch_size: 256
 seed: 0
 save_checkpoints: true
 
-resume_run: True
+resume_run: False
 
 trainer:
   check_val_every_n_epoch: 1
