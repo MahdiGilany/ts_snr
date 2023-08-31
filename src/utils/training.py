@@ -524,7 +524,7 @@ def manual_train_meta_deeptime_closedform(
     for epoch in tqdm(range(meta_config.epochs), desc="Training meta model, epochs"):
         # training
         meta_model.train()
-        for batch in tqdm(train_dl, desc="Training meta model, batches"):
+        for batch in train_dl:
             optimizer.zero_grad()
             
             support_seqs, support_labels, query_seqs, query_labels = batch
@@ -533,21 +533,33 @@ def manual_train_meta_deeptime_closedform(
             query_seqs = query_seqs.to(device)
             query_labels = query_labels.to(device)
             
-            batch_size = support_seqs.shape[0]
+            batch_size, num_shots, lookback, outdim = support_seqs.shape
             
-            preds = []
-            for i in range(batch_size):
-                # fast adapt
-                support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
-                support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
-                support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
-                W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
+            # fast adapt
+            support_latent = meta_model(support_seqs.reshape(-1, lookback, outdim)).reshape(batch_size, num_shots, -1) # (batch_size, shots, horizon)
+            support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (batch_size, horizon, horizon)
+            support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels.squeeze(-1)) # (batch_size, horizon, horizon)
+            support_latentTsupport_latent.diagonal(dim1=-2, dim2=-1).add_(0.6)
+            W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (batch_size, horizon, horizon)
+            
+            #meta test
+            query_latent = meta_model(query_seqs).squeeze(-1).reshape(batch_size, 1, -1) # (batch_size, 1, horizon)
+            preds = torch.matmul(query_latent, W_HH).transpose(1,2) # (batch_size, horizon, 1)
+            
+            # preds = []
+            # for i in range(batch_size):
+            #     # fast adapt
+            #     support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+            #     support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+            #     support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+            #     W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
                 
-                #meta test
-                query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
-                pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
-                preds.append(pred)
-            preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+            #     #meta test
+            #     query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+            #     pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+            #     preds.append(pred)
+            # preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+            
             loss = criterion(preds, query_labels)
             loss.backward()
             optimizer.step()
@@ -568,21 +580,33 @@ def manual_train_meta_deeptime_closedform(
                 query_seqs = query_seqs.to(device)
                 query_labels = query_labels.to(device)
                 
-                batch_size = support_seqs.shape[0]
+                batch_size, num_shots, lookback, outdim = support_seqs.shape
+            
+                # fast adapt
+                support_latent = meta_model(support_seqs.reshape(-1, lookback, outdim)).reshape(batch_size, num_shots, -1) # (batch_size, shots, horizon)
+                support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (batch_size, horizon, horizon)
+                support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels.squeeze(-1)) # (batch_size, horizon, horizon)
+                support_latentTsupport_latent.diagonal(dim1=-2, dim2=-1).add_(0.6)
+                W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (batch_size, horizon, horizon)
                 
-                preds = []
-                for i in range(batch_size):
-                    # fast adapt
-                    support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
-                    support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
-                    support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
-                    W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
+                #meta test
+                query_latent = meta_model(query_seqs).squeeze(-1).reshape(batch_size, 1, -1) # (batch_size, 1, horizon)
+                preds = torch.matmul(query_latent, W_HH).transpose(1,2) # (batch_size, horizon, 1)
+                
+                # preds = []
+                # for i in range(batch_size):
+                #     # fast adapt
+                #     support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+                #     support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+                #     support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+                #     W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
                     
-                    #meta test
-                    query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
-                    pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
-                    preds.append(pred)
-                preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+                #     #meta test
+                #     query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+                #     pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+                #     preds.append(pred)
+                # preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+                
                 loss = criterion(preds, query_labels)
                 losses.append(loss.item())
                     
