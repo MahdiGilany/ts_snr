@@ -392,10 +392,10 @@ def manual_train_meta_deeptime(
     
     best_val_loss = np.inf
     early_stop_counter = 0
-    for epoch in tqdm(range(meta_config.epochs), desc="Training meta model"):
+    for epoch in tqdm(range(meta_config.epochs), desc="Training meta model, epochs"):
         # training
         maml_model.train()
-        for batch in train_dl:
+        for batch in tqdm(train_dl, desc="Training meta model, batches"):
             optimizer.zero_grad()
             
             support_seqs, support_labels, query_seqs, query_labels = batch
@@ -466,3 +466,136 @@ def manual_train_meta_deeptime(
                 return torch.load(f"./{meta_config.name}.pt")
         
     return torch.load(f"./{meta_config.name}.pt")
+
+def manual_train_meta_deeptime_closedform(
+    meta_config: DictConfig,
+    input_chunk_length: int,
+    output_chunk_length: int,
+    meta_model: nn.Module,
+    data_series: DataSeries,
+    wandb_log: bool = False,
+    ):
+    # create a dataset and data loader
+    train_data = data_series.train_series
+    val_data = data_series.val_series
+    
+    train_ds = MetaDataset(train_data, num_shots=meta_config.num_shots, lookback=input_chunk_length, horizon=output_chunk_length)
+    val_ds = MetaDataset(val_data, num_shots=meta_config.num_shots, lookback=input_chunk_length, horizon=output_chunk_length)
+    
+    train_dl = DataLoader(
+            train_ds,
+            batch_size=meta_config.batch_size,
+            shuffle=True,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=False,
+            )
+    
+    val_dl = DataLoader(
+            val_ds,
+            batch_size=meta_config.batch_size,
+            shuffle=False,
+            num_workers=0,
+            pin_memory=True,
+            drop_last=False,
+            )
+    
+    
+    # train the model
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    meta_model = meta_model.to(device=device, dtype=train_ds[0][0].dtype)
+    
+    # # maml model
+    # import learn2learn as l2l
+    # maml_model = l2l.algorithms.MAML(meta_model,
+    #                                 lr=meta_config.adapt_lr,
+    #                                 first_order=False
+    #                                 )
+    
+    # for name, param in maml_model.named_parameters():
+    #     if param.requires_grad:
+    #         print(name, param.shape)
+    
+    optimizer = torch.optim.AdamW(meta_model.parameters(), lr=meta_config.lr)
+    criterion = nn.MSELoss()
+    
+    best_val_loss = np.inf
+    early_stop_counter = 0
+    for epoch in tqdm(range(meta_config.epochs), desc="Training meta model, epochs"):
+        # training
+        meta_model.train()
+        for batch in tqdm(train_dl, desc="Training meta model, batches"):
+            optimizer.zero_grad()
+            
+            support_seqs, support_labels, query_seqs, query_labels = batch
+            support_seqs = support_seqs.to(device)
+            support_labels = support_labels.to(device)
+            query_seqs = query_seqs.to(device)
+            query_labels = query_labels.to(device)
+            
+            batch_size = support_seqs.shape[0]
+            
+            preds = []
+            for i in range(batch_size):
+                # fast adapt
+                support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+                support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+                support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+                W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
+                
+                #meta test
+                query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+                pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+                preds.append(pred)
+            preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+            loss = criterion(preds, query_labels)
+            loss.backward()
+            optimizer.step()
+            
+            if wandb_log:
+                wandb.log({"Meta/train_loss": loss.item()})
+        
+        
+        # validation
+        meta_model.eval()
+        losses = []
+        early_stop_counter += 1
+        with torch.no_grad():
+            for batch in val_dl:
+                support_seqs, support_labels, query_seqs, query_labels = batch
+                support_seqs = support_seqs.to(device)
+                support_labels = support_labels.to(device)
+                query_seqs = query_seqs.to(device)
+                query_labels = query_labels.to(device)
+                
+                batch_size = support_seqs.shape[0]
+                
+                preds = []
+                for i in range(batch_size):
+                    # fast adapt
+                    support_latent = meta_model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+                    support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+                    support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+                    W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
+                    
+                    #meta test
+                    query_latent = meta_model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+                    pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+                    preds.append(pred)
+                preds = torch.cat(preds, dim=0) # (batch_size, horizon, 1)
+                loss = criterion(preds, query_labels)
+                losses.append(loss.item())
+                    
+            avg_loss = np.mean(losses)
+            if wandb_log:
+                wandb.log({"Meta/val_loss": avg_loss})
+            if avg_loss < best_val_loss:
+                early_stop_counter = 0
+                best_val_loss = avg_loss
+                torch.save(meta_model, f"./{meta_config.name}.pt")
+            if early_stop_counter > meta_config.patience:
+                log.info("Early stopping")
+                return torch.load(f"./{meta_config.name}.pt")
+        
+    return torch.load(f"./{meta_config.name}.pt")
+

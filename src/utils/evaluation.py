@@ -727,18 +727,33 @@ def historical_forecasts_with_metadeeptime_manual(
         
         batch_size = support_seqs.shape[0]
         
-        train_errors = []
+        ## turn on for MAML
+        # train_errors = []
+        # for i in range(batch_size):
+        #     cloned_maml_model = model.clone() # head of the model
+        #     # fast adapt
+        #     train_error = maml_fast_adapt(cloned_maml_model, support_seqs[i], support_labels[i], val=True, adaptation_steps=meta_config.adapt_steps)
+        #     train_errors.append(train_error)
+        #     #meta test
+        #     pred = cloned_maml_model(query_seqs[i:i+1])
+        #     preds.append(pred.detach().cpu())
+        #     targets.append(query_labels[i:i+1].detach().cpu())
+        
+        ## turn on for closedform meta deeptime
         for i in range(batch_size):
-            cloned_maml_model = model.clone() # head of the model
             # fast adapt
-            train_error = maml_fast_adapt(cloned_maml_model, support_seqs[i], support_labels[i], val=True, adaptation_steps=meta_config.adapt_steps)
-            train_errors.append(train_error)
-            #meta test
-            pred = cloned_maml_model(query_seqs[i:i+1])
-            preds.append(pred.detach().cpu())
-            targets.append(query_labels[i:i+1].detach().cpu())
+            support_latent = model(support_seqs[i]).squeeze(-1).unsqueeze(0) # (1, shots, horizon)
+            support_latentTsupport_latent = torch.matmul(support_latent.transpose(1, 2), support_latent) # (1, horizon, horizon)
+            support_latentTsupport_labels = torch.matmul(support_latent.transpose(1, 2), support_labels[i].squeeze(-1).unsqueeze(0)) # (1, horizon, horizon)
+            W_HH = torch.matmul(torch.inverse(support_latentTsupport_latent), support_latentTsupport_labels) # (1, horizon, horizon)
             
-    
+            #meta test
+            query_latent = model(query_seqs[i:i+1]).squeeze(-1).unsqueeze(0) # (1, 1, horizon)
+            pred = torch.matmul(query_latent, W_HH).squeeze(0).unsqueeze(-1) # (1, horizon, 1)
+            preds.append(pred)
+            targets.append(query_labels[i:i+1].detach().cpu())
+
+
     # preparing torch predictions and targets (not darts.timeseries predictions) 
     preds = torch.cat(preds, dim=0)
     preds = preds.flip(dims=[0]) # flip back since dataset get item is designed in reverse order

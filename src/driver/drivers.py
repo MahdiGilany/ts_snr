@@ -538,11 +538,11 @@ def darts_twostage_metadeeptime_globalforecasting_driver_run(configs: DictConfig
         
         # instantiate darts model 
         log.info(f"Instantiating model <{configs.model._target_}>")
-        model_config = copy(configs.model)
+        model_config = configs.model.copy()
         model_config['model_name'] = 'deeptime'
-        model_config.pop('meta_config')
+        del model_config.meta_config
         model: TorchForecastingModel = instantiate(
-            configs.model,
+            model_config,
             pl_trainer_kwargs=pl_trainer_kwargs,
             torch_metrics=metrics,
             save_checkpoints=configs.save_checkpoints,
@@ -576,8 +576,8 @@ def darts_twostage_metadeeptime_globalforecasting_driver_run(configs: DictConfig
     # manually train MAML using DeeoTime model
     if configs.train_stage2:
         log.info("Training stage 2 sequence model")
-        from src.utils.training import manual_train_meta_deeptime
-        meta_model = manual_train_meta_deeptime(
+        from src.utils.training import manual_train_meta_deeptime, manual_train_meta_deeptime_closedform
+        meta_model = manual_train_meta_deeptime_closedform( #manual_train_meta_deeptime( # turn on for MAML instead of closed form
             meta_config=configs.model.meta_config,
             input_chunk_length=configs.model.input_chunk_length,
             output_chunk_length=configs.model.output_chunk_length,
