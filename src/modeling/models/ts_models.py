@@ -26,7 +26,7 @@ from tactis.darts.model import TACTiSModel
 from abc import ABC, abstractmethod
 
 
-
+raise NotImplementedError('This file is not used')
 # @dataclass
 # class OptimizerConfig:
 #     lr: float = 1e-3,

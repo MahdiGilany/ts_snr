@@ -24,7 +24,7 @@ from darts.utils.torch import MonteCarloDropout
 logger = get_logger(__name__)
 
 
-class _SinDeepTIMeModule(PLPastCovariatesModule):
+class _DeepTIMeModule(PLPastCovariatesModule):
     '''DeepTime model from https://github.com/salesforce/DeepTime/tree/main
     '''
     def __init__(
@@ -37,18 +37,17 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
         nr_params: int = 1, # The number of parameters of the likelihood (or 1 if no likelihood is used).
         use_datetime: bool = False,
-        sin_bases_ratio: float = 0.25,
+        # arguments from here, not in original deeptime
+        dict_reg_coef: float = 0.01,
+        support_dropout: bool = True,
+        support_dropout_keep_rate: float = 0.5,
+        num_support_samples: int = 10,
+        
         **kwargs,
         ):
         super().__init__(**kwargs)
-        
-        assert sin_bases_ratio <= 1 and sin_bases_ratio >= 0, "sin_bases_ratio must be between 0 and 1"
-        no_inr_bases = int(layer_size*(1 - sin_bases_ratio))
-        no_sin_bases = layer_size - no_inr_bases
-        
-        self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=no_inr_bases,
+        self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
-        self.sin_freqs = nn.Parameter(torch.randn(no_sin_bases, 1))
         self.adaptive_weights = RidgeRegressor()
         # self.adaptive_weights = RidgeRegressorTrimmed(no_remained_after_trim=3)
 
@@ -56,10 +55,12 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         self.datetime_feats = datetime_feats
         self.inr_layers = inr_layers
         self.layer_size = layer_size
-        self.no_inr_bases = no_inr_bases
-        self.no_sin_bases = no_sin_bases
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.dict_reg_coef = dict_reg_coef
+        self.support_dropout = support_dropout
+        self.support_dropout_keep_rate = support_dropout_keep_rate
+        self.num_support_samples = num_support_samples
         
         self.nr_params = nr_params
         self.use_datetime = use_datetime
@@ -80,6 +81,8 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         else:
             time_reprs = repeat(self.inr(coords), '1 t d -> b t d', b=batch_size)
 
+        self.time_reprs = time_reprs
+        # time_reprs = time_reprs/torch.norm(time_reprs, dim=1, keepdim=True)
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, forecast_horizon_length, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
         
@@ -89,7 +92,36 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         # standard_deviation = x.std(dim=1, keepdim=True) + eps
         # x = (x - expectation) / standard_deviation
         
-        w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        if self.support_dropout and self.training:
+            # if self.training:
+            # random_val = torch.rand(1)/(1-self.support_dropout_keep_rate)
+            # random_keep_rate = self.support_dropout_keep_rate + random_val
+            # rand_indices = torch.randperm(lookback_reprs.shape[1])[:int(lookback_reprs.shape[1]*random_keep_rate)]
+            
+            rand_indices = torch.randperm(lookback_reprs.shape[1])[:int(lookback_reprs.shape[1]*self.support_dropout_keep_rate)]
+            self.norm_indices = torch.cat([rand_indices, torch.arange(lookback_reprs.shape[1],time_reprs.shape[1])])
+            w, b = self.adaptive_weights(lookback_reprs[:,rand_indices,...], x[:,rand_indices,...])
+            
+            # rand_indices2 = torch.randperm(lookback_reprs.shape[1])[:int(lookback_reprs.shape[1]*self.support_dropout_keep_rate)]
+            # w_, b_ = self.adaptive_weights(lookback_reprs[:,rand_indices2,...], x[:,rand_indices2,...])
+            # w_ = w_.detach().cpu()
+            # wandb.log({'w-w_': torch.norm(w.detach().cpu()-w_) })
+            
+            # else:
+            #     for i in range(self.num_support_samples):
+            #         rand_indices = torch.randperm(lookback_reprs.shape[1])[:int(lookback_reprs.shape[1]*self.support_dropout_keep_rate)]
+            #         w, b = self.adaptive_weights(lookback_reprs[:,rand_indices,...], x[:,rand_indices,...])
+            #         if i == 0:
+            #             w_all = w
+            #             b_all = b
+            #         else:
+            #             w_all += w
+            #             b_all += b
+            #     w = w_all/self.num_support_samples
+            #     b = b_all/self.num_support_samples
+        else:
+            w, b = self.adaptive_weights(lookback_reprs, x) # w.shape = (batch_size, layer_size, output_dim)
+        
         preds = self.forecast(horizon_reprs, w, b)       
         
         # hack used for importance weights visualization (only first dim)
@@ -97,6 +129,33 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         
         # # reverse normalization
         # preds = preds * standard_deviation + expectation
+        
+        
+        # # reversible intrance normalization per 96 steps
+        # eps = 1e-5
+        # x = x.view(batch_size, -1, 96, x.shape[-1]) # shape = (batch_size, lookback_len/96, 96, input_dim)
+        # expectation = x.mean(dim=2, keepdim=True)
+        # standard_deviation = x.std(dim=2, keepdim=True) + eps
+        # x = (x - expectation) / standard_deviation
+        # # x = x.reshape(batch_size, -1, x.shape[-1]) # shape = (batch_size, lookback_len, input_dim)
+        
+        # # predictions
+        # preds_all = []
+        # lookback_reprs = lookback_reprs.view(batch_size, -1, 96, lookback_reprs.shape[-1]) 
+        # w_all = []
+        # b_all = []
+        # for i in range(lookback_reprs.shape[1]):
+        #     w, b = self.adaptive_weights(lookback_reprs[:,i,...], x[:,i,...]) # w.shape = (batch_size, layer_size, output_dim)
+        #     w_all.append(w)
+        #     b_all.append(b)
+        #     preds_all.append(self.forecast(horizon_reprs, w, b)*standard_deviation[:,i,...]+expectation[:,i,...])
+        # preds = torch.stack(preds_all, dim=0)
+        # preds = preds.mean(dim=0)
+        
+        # w = torch.stack(w_all, dim=0).mean(dim=0)
+        # b = torch.stack(b_all, dim=0).mean(dim=0)
+        # self.learned_w = torch.cat([w, b], dim=1)[..., 0] # shape = (batch_size, layer_size + 1)
+        
         
         try: 
             # wandb.log({'lookback_reprs': lookback_reprs[0, 0, 0], 'horizon_reprs': horizon_reprs[0, 0, 0]})
@@ -111,6 +170,32 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         )
         return preds
 
+    def _compute_regularization_loss(self) -> torch.Tensor:
+        """Computes the regularization loss."""
+        return self.dict_reg_coef*self.time_reprs[:, self.norm_indices,...].norm(dim=1).mean() # + 0.05*self.learned_w.abs().mean()
+
+    def training_step(self, train_batch, batch_idx) -> torch.Tensor:
+        """performs the training step"""
+        # tricks
+        self.val = False
+        self.y = train_batch[-1]
+        
+        output = self._produce_train_output(train_batch[:-1])
+        target = train_batch[
+            -1
+        ]  # By convention target is always the last element returned by datasets
+        loss = self._compute_loss(output, target)
+        loss = loss + self._compute_regularization_loss()
+        self.log(
+            "train_loss",
+            loss,
+            batch_size=train_batch[0].shape[0],
+            prog_bar=True,
+            sync_dist=True,
+        )
+        self._calculate_metrics(output, target, self.train_metrics)
+        return loss
+    
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b
 
@@ -187,7 +272,7 @@ class _SinDeepTIMeModule(PLPastCovariatesModule):
         else:
             return optimizer
     
-class SinDeepTIMeModel(PastCovariatesTorchModel):
+class DeepTIMeModel(PastCovariatesTorchModel):
     def __init__(
         self,
         input_chunk_length: int,
@@ -197,6 +282,7 @@ class SinDeepTIMeModel(PastCovariatesTorchModel):
         inr_layers: int = 5,
         n_fourier_feats: int = 4096,
         scales: float = [0.01, 0.1, 1, 5, 10, 20, 50, 100], # TODO: don't understand
+        dict_reg_coef: float = 0.01,
         **kwargs,
         ):
         super().__init__(**self._extract_torch_model_params(**self.model_params))
@@ -210,6 +296,7 @@ class SinDeepTIMeModel(PastCovariatesTorchModel):
         self.layer_size = layer_size
         self.n_fourier_feats = n_fourier_feats
         self.scales = scales
+        self.dict_reg_coef = dict_reg_coef
         
         # TODO: add this option
         if datetime_feats != 0:
@@ -229,7 +316,7 @@ class SinDeepTIMeModel(PastCovariatesTorchModel):
         nr_params = 1 if self.likelihood is None else self.likelihood.num_parameters
         use_datetime = True if self.datetime_feats != 0 else False
         
-        return _SinDeepTIMeModule(
+        return _DeepTIMeModule(
             forecast_horizon_length=output_chunk_length,
             datetime_feats=self.datetime_feats,
             layer_size=self.layer_size,
@@ -238,5 +325,6 @@ class SinDeepTIMeModel(PastCovariatesTorchModel):
             scales=self.scales,
             nr_params=nr_params,
             use_datetime=use_datetime,
+            dict_reg_coef=self.dict_reg_coef,
             **self.pl_module_params,
             )

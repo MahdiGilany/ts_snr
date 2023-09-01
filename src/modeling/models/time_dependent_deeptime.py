@@ -38,6 +38,9 @@ class _TimeDependentDeepTIMeModule(PLPastCovariatesModule):
         use_datetime: bool = False,
         **kwargs,
         ):
+        # not implemented this method yet
+        raise NotImplementedError
+
         super().__init__(**kwargs)
         self.inr = INR(in_feats=datetime_feats + 1, layers=inr_layers, layer_size=layer_size,
                        n_fourier_feats=n_fourier_feats, scales=scales)
