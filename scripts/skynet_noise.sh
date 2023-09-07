@@ -34,6 +34,7 @@ seed=0
 batch_size=256
 epochs=100
 lr=0.001
+dict_reg_coef=0.05
 dataset_name="etth2"
 # only for crypto
 crypto_name="Bitcoin"
@@ -88,6 +89,7 @@ python main.py name=$name\
             model.input_chunk_length=$input_chunk_length\
             model.output_chunk_length=$output_chunk_length\
             model.optimizer_kwargs.lr=$lr\
+            +model.dict_reg_coef=$dict_reg_coef\
             data.dataset_name=$dataset_name\
             +data.crypto_name=$crypto_name\
             +data.prct_rows_to_load=$prct_rows_to_load\
