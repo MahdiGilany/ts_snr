@@ -198,6 +198,7 @@ def crypto(
     use_scaler: bool = True,
     prct_rows_to_load: float = 1.0,
     target_series_index: int = None,
+    chunk_number: int = None,
     **kwargs
     ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
     """Loads crypto dataset
@@ -210,11 +211,14 @@ def crypto(
         split_ratio = tuple(map(float, split_ratio.split()))
     
     LEN_CRYPTO = 24236806
-    # breakpoint()
     nrows = int(prct_rows_to_load * LEN_CRYPTO)
+    skip_rows = []
     
+    if chunk_number is not None:
+        skip_rows = range(1, chunk_number * nrows + 1)
+         
     asset_details_df = pd.read_csv('~/.darts/datasets/crypto_asset.csv')
-    crypto_df = pd.read_csv('~/.darts/datasets/crypto.csv', nrows=nrows)
+    crypto_df = pd.read_csv('~/.darts/datasets/crypto.csv', nrows=nrows, skiprows=skip_rows)
     
     # dropped Dogecoin since it is short
     asset_details_df = asset_details_df.drop(index=13)
