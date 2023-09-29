@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=1-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti07,compute1080ti08,compute1080ti10
+#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -27,16 +27,16 @@ sleep 3
 echo "STARTING"
 
 # defaults
-version=omp_secondv
+version=inrs50_layersz20_nonzero20_bitcoin_prct0.1_univar
 experiment="exp_default"
-model_name="omp_deeptime"
+model_name="manyinrs_omp_deeptime"
 seed=0
 batch_size=256
 epochs=100
 lr=0.001
 patience=10
 loss_name=mse
-dataset_name="etth2"
+dataset_name="crypto"
 # split=(0.8 0.1 0.1)
 
 # only for crypto
@@ -46,13 +46,13 @@ prct_rows_to_load=0.1
 noise_type="gaussian"
 noise_std=0.0
 target_series_index=-1
-layer_size=256
+layer_size=20
 tolerance=1e-3
-n_nonzero_coefs=15
+n_nonzero_coefs=20
 new_dir=True
 verbose=False
 multiple=7
-output_chunk_length=96
+output_chunk_length=15
 input_chunk_length=-1
 
 # parse arguments
