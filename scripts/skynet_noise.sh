@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=3-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
+#SBATCH --exclude=compute1080ti03,compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -39,6 +39,7 @@ dataset_name="etth2"
 # only for crypto
 crypto_name="Bitcoin"
 prct_rows_to_load=0.1
+chunk_number=0
 noise_type="gaussian"
 noise_std=0
 target_series_index=-1
@@ -67,7 +68,7 @@ do
 
 rand_seed=$((seed + SLURM_JOB_ID))
 
-for noise_std in 0 0.5 1.0 # 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
+for noise_std in 0 # 0 0.3 0.6 0.9 1.2 1.5 1.8 #2.0 2.5 3.0 3.5
 do
 
 # set name, group, and input chunk length
@@ -76,7 +77,7 @@ then
     input_chunk_length=$((output_chunk_length * multiple))
 fi
 group="${model_name}_${dataset_name}_in${input_chunk_length}_out${output_chunk_length}_noise_${noise_type}_std${noise_std}_v${version}"
-name="${group}_seed${rand_seed}"
+name="${group}_seed${rand_seed}_chunk${chunk_number}"
 
 echo "seed ${rand_seed} and noise std ${noise_std} model_name ${model_name}"
 python main.py name=$name\
@@ -93,6 +94,7 @@ python main.py name=$name\
             data.dataset_name=$dataset_name\
             +data.crypto_name=$crypto_name\
             +data.prct_rows_to_load=$prct_rows_to_load\
+            +data.chunk_number=$chunk_number\
             data.noise_type=$noise_type\
             data.noise_std=$noise_std\
             data.target_series_index=$target_series_index\
