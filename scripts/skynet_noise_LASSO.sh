@@ -3,7 +3,7 @@
 #SBATCH --mem=25G
 #SBATCH --gres=gpu:1
 #SBATCH --time=3-01:00:00
-#SBATCH --exclude=compute1080ti06,compute1080ti08,compute1080ti09,compute1080ti10
+#SBATCH --exclude=compute1080ti01
 #SBATCH -c 6 
 #SBATCH -o /home/abbasgln/code/ts_snr/slurm_logs/%J.out
 #SBATCH -e /home/abbasgln/code/ts_snr/slurm_logs/%J.err 
@@ -18,7 +18,7 @@ echo "CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES
 # nvidia-smi
 # rmmod nvidia_uvm
 # modprobe nvidia_uvm
-sleep 3
+# sleep 3
 
 # HYDRA_FULL_ERROR=1
 # export HYDRA_FULL_ERROR
@@ -45,7 +45,8 @@ prct_rows_to_load=0.1
 #
 noise_type="gaussian"
 noise_std=0
-target_series_index=-1
+# target_series_index=-1
+outdim=8
 new_dir=True
 verbose=False
 multiple=3
@@ -96,6 +97,7 @@ python main.py name=$name\
             +model.adaptation_steps=$adapt_steps\
             +model.adaptation_lr=$adapt_lr\
             +model.L1=$L1\
+            +model.out_dim=$outdim\
             data.dataset_name=$dataset_name\
             +data.crypto_name=$crypto_name\
             +data.prct_rows_to_load=$prct_rows_to_load\
