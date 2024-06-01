@@ -27,15 +27,15 @@ echo "CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES
 echo "STARTING"
 
 # defaults
-version=Slurm_LASSO
+version=Slurm_LASSO_adpt5
 experiment="exp_default"
 # model_name="maml_deeptime"
 model_name="LASSO_deeptime"
 seed=0
 batch_size=256
-epochs=100
+epochs=50
 lr=0.001
-adapt_steps=15
+adapt_steps=5
 adapt_lr=0.01
 L1=True
 dataset_name="ettm2"
@@ -104,6 +104,7 @@ python main.py name=$name\
             data.noise_type=$noise_type\
             data.noise_std=$noise_std\
             logger.wandb.group=$group\
+            callbacks.early_stopping.patience=5\
             verbose=$verbose\
             id=$SLURM_JOB_ID
 done

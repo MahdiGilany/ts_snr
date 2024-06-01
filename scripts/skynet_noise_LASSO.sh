@@ -27,7 +27,7 @@ echo "CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES
 echo "STARTING"
 
 # defaults
-version=Slurm_LASSO
+version=Slurm_LASSO_adpt5
 experiment="exp_default"
 # model_name="maml_deeptime"
 model_name="LASSO_deeptime"
@@ -35,7 +35,7 @@ seed=0
 batch_size=256
 epochs=100
 lr=0.001
-adapt_steps=15
+adapt_steps=5
 adapt_lr=0.01
 L1=True
 dataset_name="exchange_rate"
