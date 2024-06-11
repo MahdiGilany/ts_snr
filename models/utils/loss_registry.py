@@ -18,29 +18,6 @@ def create_loss_fx(loss_name, **kwargs):
 
 
 @register_loss
-def edl_loss(num_classes=2):
-    from ..loss.evidential_loss import edl_mse_loss
-    
-    def wrap_loss(output, target, epoch_num, reduction='none'):
-        if len(target.shape) == 1:
-            target = F.one_hot(target, num_classes=num_classes)
-        
-        loss = edl_mse_loss(
-            output,
-            target,
-            epoch_num,
-            num_classes,
-            50,
-            reduction=reduction,
-            device=output.device
-            )
-        return loss
-    
-    
-    return wrap_loss    
-
-
-@register_loss
 def crossentropy_loss(num_classes=2):
     
     def wrap_loss(output, target, epoch_num=0, reduction='none'):        
