@@ -63,6 +63,11 @@ class DataConfig:
     split_ratio: float = None
     use_scaler: bool = True
     target_series_index: int = -1
+    
+    def __post_init__(self):
+        if self.dataset_name == "exchange_rate" and self.target_series_index == -1:
+            self.target_series_index = -2
+            
 
 @dataclass
 class DeepTimeExpConfig(BasicExperimentConfig):
