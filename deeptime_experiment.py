@@ -67,7 +67,7 @@ class DataConfig:
 @dataclass
 class DeepTimeExpConfig(BasicExperimentConfig):
     """Configuration for the experiment."""
-    name: str = "deeptime_test"
+    name: str = "deeptime"
     group: str = None
     project: str = "timeseries" 
     resume: bool = False
@@ -161,7 +161,7 @@ class DeepTimeExp(BasicExperiment):
         # backtest series
         num_trimmed_train_val = max(len(self.test_series),self.config.data_config.lookback)
         self.train_val_series_trimmed = concatenate([self.train_series, self.val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
-        self.train_val_test_series_trimmed = concatenate([self.train_val_series_trimmed[-self.config.data_config.lookback:], self.test_series]) # use a lookback of val for testing
+        self.test_hat_series = concatenate([self.train_val_series_trimmed[-self.config.data_config.lookback:], self.test_series]) # use a lookback of val for testing
 
         # datasets and loaders
         train_ds = PastCovariatesSequentialDataset(
@@ -179,7 +179,7 @@ class DeepTimeExp(BasicExperiment):
             use_static_covariates=False
             )
         test_ds = PastCovariatesSequentialDataset(
-            self.test_series,
+            self.test_hat_series,
             input_chunk_length=self.config.data_config.lookback,
             output_chunk_length=self.config.data_config.horizon,
             covariates=None,
@@ -242,8 +242,8 @@ class DeepTimeExp(BasicExperiment):
     
     
         eta_min = self.config.scheduler_config.eta_min
-        warmup_epochs = self.config.scheduler_config.warmup_epochs
-        T_max = self.config.scheduler_config.T_max
+        warmup_epochs = self.config.scheduler_config.warmup_epochs * len(self.train_loader)
+        T_max = self.config.scheduler_config.T_max * len(self.train_loader)
         
         scheduler_fns = []
         for param_group in self.optimizer.param_groups:
@@ -294,13 +294,10 @@ class DeepTimeExp(BasicExperiment):
                 loss.backward()
                 self.optimizer.step()
                 self.scheduler.step()
-                wandb.log({"lr": self.scheduler.get_last_lr()[0]})
+                wandb.log({"lr": self.scheduler.get_last_lr()[1], "epoch": self.epoch})
             else:
                 # collecting predictions for val and test
                 preds.append(pred_series.detach().cpu())
-
-        if desc == "val":
-            pass
         
         if desc == "test":
             preds = torch.cat(preds, dim=0)
@@ -319,7 +316,7 @@ class DeepTimeExp(BasicExperiment):
         horizon = self.config.data_config.horizon
         for i in tqdm(range(preds.shape[0]), desc="Turn predictions into timeseries"):
             backtest_series = TimeSeries.from_times_and_values(
-                self.test_series.time_index[lookback+i:lookback+i+horizon],
+                self.test_hat_series.time_index[lookback+i:lookback+i+horizon], # test_hat_series starts from inside val_series
                 preds[i,...].detach().cpu().numpy(),
                 freq=self.test_series.freq,
                 columns=self.test_series.components
@@ -334,7 +331,7 @@ class DeepTimeExp(BasicExperiment):
         train_val_unscaled_series_trimmed,
         ) = self.calculate_metrics(list_backtest_series)
         
-        logging.info("W&B logging")
+        logging.info("logging metrics")
         self.log_metrics(
             metrics,
             metrics_unscaled,
@@ -395,6 +392,8 @@ class DeepTimeExp(BasicExperiment):
         wandb_log_results_and_plots(
             metrics=metrics,
             metrics_unscaled=metrics_unscaled,
+            epoch=self.epoch,
+            output_chunk_length=self.config.data_config.horizon,
             components=components,
             test_series=test_series,
             test_unscaled_series=test_unscaled_series,
@@ -402,14 +401,14 @@ class DeepTimeExp(BasicExperiment):
             list_backtest_unscaled_series=list_backtest_unscaled_series,
             train_val_series_trimmed=train_val_series_trimmed,
             train_val_unscaled_series_trimmed=train_val_unscaled_series_trimmed,
-            output_chunk_length=self.config.data_config.horizon
             )
         
         # log DeepTime bases
         wandb_log_bases(
             self.model,
             self.config.data_config.lookback,
-            self.config.data_config.horizon
+            self.config.data_config.horizon,
+            self.config.exp_dir,
             )
     
     def save_states(self, best_model=False):

@@ -28,11 +28,16 @@ from utils.metrics import calculate_metrics
 def wandb_log_bases(
     model,
     lookback_len,
-    horizon_len
+    horizon_len,
+    exp_dir,
     ):
     # getting time representations (bases)
     coords = model.get_coords(lookback_len, horizon_len).cuda()
     time_reprs = model.inr(coords).squeeze(0).detach().cpu().numpy() # shape = (lookback+horizon, layer_size)
+    
+    # csv creation of bases
+    bases_df = pd.DataFrame(time_reprs)
+    bases_df.to_csv(os.path.join(exp_dir, "bases.csv"), index=False)
     
     # wandb table creation of bases
     columns = [f"dim_{i}" for i in range(time_reprs.shape[1])]
@@ -63,6 +68,8 @@ def wandb_log_bases(
 def wandb_log_results_and_plots(
     metrics: Dict,
     metrics_unscaled: Dict,
+    epoch: int,
+    output_chunk_length: int, 
     components: List,
     test_series: TimeSeries,
     test_unscaled_series: TimeSeries,
@@ -70,19 +77,22 @@ def wandb_log_results_and_plots(
     list_backtest_unscaled_series: List[TimeSeries],
     train_val_series_trimmed: TimeSeries,
     train_val_unscaled_series_trimmed: TimeSeries,
-    output_chunk_length: int, 
+    
 ):  
-    logging.info("logging results to wandb")
     # logging metrics
-    wandb.log({
+    metrics_dict = {
         f"test_best_historical_{result_name}": metrics[result_name].mean() 
         for result_name in metrics.keys() if not np.isnan(metrics[result_name]).any()
-        })
+        }
+    metrics_dict.update({"epoch": epoch})
+    wandb.log(metrics_dict)
     
-    wandb.log({
-        f"test_best_historical_unscaled_{result_name}": metrics_unscaled[result_name].mean()
+    metrics_unscaled_dict = {
+        f"unscaled/test_best_historical_{result_name}": metrics_unscaled[result_name].mean()
         for result_name in metrics_unscaled.keys() if not np.isnan(metrics_unscaled[result_name]).any()
-        })
+        }
+    metrics_unscaled_dict.update({"epoch": epoch})
+    wandb.log(metrics_unscaled_dict)
     
     
     # component-based metrics and timeseries plots
@@ -91,15 +101,19 @@ def wandb_log_results_and_plots(
             break
         
         # component-based metrics
-        wandb.log({
+        component_metrics_dict = {
             f"test_best_historical_{result_name}_{component}": metrics[result_name][..., i].mean()
             for result_name in metrics.keys() if not np.isnan(metrics[result_name]).any()
-            })
-    
-        wandb.log({
-            f"test_best_historical_unscaled_{result_name}_{component}": metrics_unscaled[result_name][..., i].mean()
+            }
+        component_metrics_dict.update({"epoch": epoch})
+        wandb.log(component_metrics_dict)
+        
+        component_metrics_unscaled_dict = {
+            f"unscaled/test_best_historical_{result_name}_{component}": metrics_unscaled[result_name][..., i].mean()
             for result_name in metrics_unscaled.keys() if not np.isnan(metrics_unscaled[result_name]).any()
-            })
+            }
+        component_metrics_unscaled_dict.update({"epoch": epoch})
+        wandb.log(component_metrics_unscaled_dict)
     
         
         # timeseries backtest plots (we use last points only)

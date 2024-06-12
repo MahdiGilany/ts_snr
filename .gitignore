@@ -197,3 +197,5 @@ outputs/
 /OLD 
 
 /slurm_logs
+
+*.csv
