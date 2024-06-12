@@ -1,2 +1,0 @@
-_target_: src.modeling.registry.create_model
-model_name: resnet10_feat_dim_64

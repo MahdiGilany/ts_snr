@@ -1,2 +1,0 @@
-_target_: src.modeling.registry.create_model
-model_name: vicreg_resnet_10_crops_split_seed_2

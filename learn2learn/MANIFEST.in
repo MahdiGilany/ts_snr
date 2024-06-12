@@ -1,4 +1,0 @@
-global-include *.pyx
-global-include *.pxd
-global-include *.c
-include learn2learn/**/*

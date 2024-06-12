@@ -1,5 +1,0 @@
-defaults: 
-  - transform_config_base 
-
-us_augmentation: null
-tensor_transform: null 

@@ -25,9 +25,9 @@ from darts.models.forecasting.torch_forecasting_model import PastCovariatesTorch
 from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel, DEFAULT_DARTS_FOLDER
 
 from utils.setup import BasicExperiment, BasicExperimentConfig
+from utils.metrics import calculate_metrics
 from utils.evaluation import (
-    historical_forecasts_manual,
-    calculate_metrics, 
+    historical_forecasts_manual, 
     sliding_window,
     wandb_log_results_and_plots,
     wandb_log_bases)
@@ -55,9 +55,9 @@ class TrainerConfig:
     max_epochs: int = None 
     limit_train_batches: int = None
     check_val_every_n_epoch: int = 5
-    num_sanity_val_steps: tp.Optional[] = None
+    num_sanity_val_steps: tp.Optional[int] = None
     # enable_checkpointing: null # makes training super slow, superisingly even if it is null
-    enable_model_summary: tp.Optional[] = None
+    enable_model_summary: tp.Optional[bool] = None
     log_every_n_steps: int = 5
     accumulate_grad_batches: int = 1 
 
@@ -65,7 +65,7 @@ class TrainerConfig:
 class DataConfig:
     """Configuration for the data."""
     dataset_name: str = "exchange_rate"
-    split_ratio: tp.Tuple[float] = (0.7, 0.1, 0.2)
+    split_ratio: tp.Tuple[float] = None
     use_scaler: bool = True
     target_series_index: int = -1
 
@@ -80,8 +80,9 @@ class DeepTimeConfig:
     layer_size: int = 256
     inr_layers: int = 5
     n_fourier_feats: int = 4096
-    scales: tp.List[float] = [0.01, 0.1, 1, 5, 10, 20, 50, 100] 
-    dict_reg_coef: float = 0.05
+    scales: tp.List[float] = field(default_factory=lambda: [0.01, 0.1, 1, 5, 10, 20, 50, 100])
+    dict_reg_coef: float = 0.0
+
 
 @dataclass
 class DeepTimeExpConfig(BasicExperimentConfig):
@@ -94,15 +95,16 @@ class DeepTimeExpConfig(BasicExperimentConfig):
     use_wandb: bool = True
     
     seed: int = 0
-    epochs: int = 50
-    batch_size: int = 32
+    epochs: int = 100
+    batch_size: int = 256
     
-    data_config: DataConfig = DataConfig(name="etth2", lookback=488, horizon=96)
+    data_config: DataConfig = DataConfig(dataset_name="exchange_rate")
+    model_config: DeepTimeConfig = DeepTimeConfig(input_chunk_length=288, output_chunk_length=96)
     
     optimizer_config: OptimizerConfig = OptimizerConfig()
-    scheduler_config: SchedulerConfig = SchedulerConfig(T_max=epochs, eta_max=optimizer_config.lr)
     trainer_config: TrainerConfig = TrainerConfig(max_epochs=epochs)
-    model_config: DeepTimeConfig = DeepTimeConfig()
+    scheduler_config: SchedulerConfig = SchedulerConfig(T_max=epochs, eta_max=optimizer_config.lr)
+
 
 class DeepTimeExp(BasicExperiment):
     
@@ -182,8 +184,8 @@ class DeepTimeExp(BasicExperiment):
     
     def setup_model(self):
         from models.deep_time import DeepTIMeModel
-        from models.utils.loss_registry import TorchLosses
-        from models.utils.optimizer_scheduler import LambdaLRWrapper
+        from utils.loss_registry import TorchLosses
+        from utils.optimizer_scheduler import LambdaLRWrapper
         
         pl_trainer_kwargs = {}
         pl_trainer_kwargs.update(self.config.trainer_config)
@@ -224,21 +226,40 @@ class DeepTimeExp(BasicExperiment):
             plot_weights=True if (("deeptime" in self.config.model_config.model_name.lower()) and logging) else False,
             )
         
+        (metrics,
+        metrics_unscaled,
+        test_unscaled_series,
+        list_backtest_unscaled_series,
+        train_val_unscaled_series_trimmed,
+        ) = self.calculate_metrics(list_backtest_series)
+        
+        logging.info("W&B logging")
+        self.log_metrics(
+            metrics,
+            metrics_unscaled,
+            self.components,
+            self.test_series,
+            test_unscaled_series,
+            list_backtest_series,
+            list_backtest_unscaled_series,
+            self.train_val_series_trimmed,
+            train_val_unscaled_series_trimmed
+            )
+    
+    def calculate_metrics(self, list_backtest_series):
         # unnormalize series
         train_val_unscaled_series_trimmed = self.scaler.inverse_transform(self.train_val_series_trimmed) if self.scaler else self.train_val_series_trimmed
         test_unscaled_series = self.scaler.inverse_transform(self.test_series) if self.scaler else self.test_series
         list_backtest_unscaled_series = [self.scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if self.scaler else list_backtest_series
         
         # calculating results for Target components only, if available (for crypto dataset)
-        components = self.components
-        target_indices = np.array(['Target' in component for component in components])
-        if target_indices.any():
-            components = list(self.test_series.components[target_indices])
-            test_series = self.test_series[components] 
-            test_series_backtest = self.test_series[components]
-            test_unscaled_series = test_unscaled_series[components]
-            list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
-            list_backtest_unscaled_series = [backtest_series[components] for backtest_series in list_backtest_unscaled_series]
+        # target_indices = np.array(['Target' in component for component in components])
+        # if target_indices.any():
+        #     components = list(self.test_series.components[target_indices])
+        #     test_series = self.test_series[components] 
+        #     test_unscaled_series = test_unscaled_series[components]
+        #     list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
+        #     list_backtest_unscaled_series = [backtest_series[components] for backtest_series in list_backtest_unscaled_series]
         
         
         # calculate metrics    
@@ -256,19 +277,8 @@ class DeepTimeExp(BasicExperiment):
             pred=predictions_unscaled
             )
         
-        logging.info("W&B logging")
-        self.log_metrics(
-            metrics,
-            metrics_unscaled,
-            components,
-            self.test_series,
-            test_unscaled_series,
-            list_backtest_series,
-            list_backtest_unscaled_series,
-            self.train_val_series_trimmed,
-            train_val_unscaled_series_trimmed
-            )
-        
+        return metrics, metrics_unscaled, test_unscaled_series, list_backtest_unscaled_series, train_val_unscaled_series_trimmed
+    
     def log_metrics(
         self,
         metrics,
@@ -293,6 +303,7 @@ class DeepTimeExp(BasicExperiment):
             train_val_unscaled_series_trimmed=train_val_unscaled_series_trimmed,
             )
         
+        # log DeepTime bases
         wandb_log_bases(
             self.model.model,
             self.config.model_config.input_chunk_length,
