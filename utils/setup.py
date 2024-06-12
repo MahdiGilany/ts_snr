@@ -52,13 +52,12 @@ def generate_exp_dir(name=None, project=None, group=None):
     """
     exp_name = name or generate_experiment_name()
     exp_dir = "logs"
-    if project is not None:
-        exp_dir = os.path.join(exp_dir, project)
+    # if project is not None:
+    #     exp_dir = os.path.join(exp_dir, project)
     if group is not None:
         exp_dir = os.path.join(exp_dir, group)
     exp_dir = os.path.join(exp_dir, exp_name)
     return exp_dir
-
 
 @dataclass
 class SubmititJobSubmissionConfig:
@@ -107,7 +106,7 @@ class BasicExperimentConfig(Serializable):
     group: str = None
     project: str = None
     entity: str = "mahdigilany"
-    resume: bool = False #TODO: implement checkpointing
+    resume: bool = True
     debug: bool = False
     use_wandb: bool = True
     cluster: SubmititJobSubmissionConfig | LocalJobSubmissionConfig = subgroups(

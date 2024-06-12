@@ -13,8 +13,8 @@ do
         --slurm_gres "gpu:a40:1" \
         --seed $SEED \
         --dict_reg_coef $DICT_REG_COEF \
+        --dataset_name $DATA \
         --input_chunk_length 288 \
-        --output_chunk_length 96 \
-
+        --output_chunk_length 96
 done 
 
