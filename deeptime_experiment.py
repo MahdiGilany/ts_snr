@@ -75,11 +75,11 @@ class DeepTimeExpConfig(BasicExperimentConfig):
     use_wandb: bool = True
     
     seed: int = 0
-    epochs: int = 1
+    epochs: int = 50
     batch_size: int = 256
     
     data_config: DataConfig = DataConfig(dataset_name="exchange_rate")
-    model_config: DeepTimeConfig = DeepTimeConfig(horizon=data_config.horizon)
+    model_config: DeepTimeConfig = DeepTimeConfig(model_horizon=data_config.horizon)
     
     optimizer_config: OptimizerConfig = OptimizerConfig()
     scheduler_config: SchedulerConfig = SchedulerConfig(T_max=epochs, eta_max=optimizer_config.lr)

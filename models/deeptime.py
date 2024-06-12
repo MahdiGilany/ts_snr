@@ -26,7 +26,7 @@ from darts.utils.torch import MonteCarloDropout
 @dataclass
 class DeepTimeConfig:
     """Configuration for the model."""
-    horizon: int = 96
+    model_horizon: int = 96
     datetime_feats: int = 0
     layer_size: int = 256
     inr_layers: int = 5
@@ -44,7 +44,7 @@ class DeepTIMeModel(nn.Module):
         ):
         super().__init__()
         self.config = config
-        
+        self.config.horizon = self.config.model_horizon
         self.inr = INR(
             in_feats=config.datetime_feats + 1,
             layers=config.inr_layers, 
