@@ -107,7 +107,7 @@ class BasicExperimentConfig(Serializable):
     group: str = None
     project: str = None
     entity: str = "mahdigilany"
-    resume: bool = True
+    resume: bool = False #TODO: implement checkpointing
     debug: bool = False
     use_wandb: bool = True
     cluster: SubmititJobSubmissionConfig | LocalJobSubmissionConfig = subgroups(
