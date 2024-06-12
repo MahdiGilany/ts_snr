@@ -25,6 +25,13 @@ from darts.models.forecasting.torch_forecasting_model import PastCovariatesTorch
 from darts.models.forecasting.torch_forecasting_model import TorchForecastingModel, DEFAULT_DARTS_FOLDER
 
 from utils.setup import BasicExperiment, BasicExperimentConfig
+from utils.evaluation import (
+    historical_forecasts_manual,
+    calculate_metrics, 
+    sliding_window,
+    wandb_log_results_and_plots,
+    wandb_log_bases)
+
 
 
 @dataclass
@@ -117,8 +124,6 @@ class DeepTimeExp(BasicExperiment):
         logging.info('Evaluating model')
         self.eval()
         
-
-                
     def setup(self):
         super().setup()
         
@@ -160,8 +165,8 @@ class DeepTimeExp(BasicExperiment):
         
         # Backtest series
         num_trimmed_train_val = max(len(self.test_series),self.config.model_config.input_chunk_length)
-        train_val_series_trimmed = concatenate([self.train_series, self.val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
-        self.train_val_test_series_trimmed = concatenate([train_val_series_trimmed[-self.config.model_config.input_chunk_length:], self.test_series]) # use a lookback of val for testing
+        self.train_val_series_trimmed = concatenate([self.train_series, self.val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
+        self.train_val_test_series_trimmed = concatenate([self.train_val_series_trimmed[-self.config.model_config.input_chunk_length:], self.test_series]) # use a lookback of val for testing
     
     def setup_callbacks(self):
         from pytorch_lightning.callbacks import EarlyStopping
@@ -212,16 +217,88 @@ class DeepTimeExp(BasicExperiment):
         
         logging.info('Backtesting model')
         list_backtest_series, test_preds, test_targets = historical_forecasts_manual(
-        model=model,
-        test_series=self.train_val_test_series_trimmed,
-        input_chunk_length=self.config.model_config.input_chunk_length,
-        output_chunk_length=self.config.model_config.output_chunk_length,
-        plot_weights=True if (("deeptime" in self.config.model_config.model_name.lower()) and logging) else False,
-        )
+            model=model,
+            test_series=self.train_val_test_series_trimmed,
+            input_chunk_length=self.config.model_config.input_chunk_length,
+            output_chunk_length=self.config.model_config.output_chunk_length,
+            plot_weights=True if (("deeptime" in self.config.model_config.model_name.lower()) and logging) else False,
+            )
+        
+        # unnormalize series
+        train_val_unscaled_series_trimmed = self.scaler.inverse_transform(self.train_val_series_trimmed) if self.scaler else self.train_val_series_trimmed
+        test_unscaled_series = self.scaler.inverse_transform(self.test_series) if self.scaler else self.test_series
+        list_backtest_unscaled_series = [self.scaler.inverse_transform(backtest_series) for backtest_series in list_backtest_series] if self.scaler else list_backtest_series
+        
+        # calculating results for Target components only, if available (for crypto dataset)
+        components = self.components
+        target_indices = np.array(['Target' in component for component in components])
+        if target_indices.any():
+            components = list(self.test_series.components[target_indices])
+            test_series = self.test_series[components] 
+            test_series_backtest = self.test_series[components]
+            test_unscaled_series = test_unscaled_series[components]
+            list_backtest_series = [backtest_series[components] for backtest_series in list_backtest_series]
+            list_backtest_unscaled_series = [backtest_series[components] for backtest_series in list_backtest_unscaled_series]
         
         
-        return
-    
+        # calculate metrics    
+        predictions = np.stack([series._xa.values for series in list_backtest_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
+        predictions_unscaled = np.stack([series._xa.values for series in list_backtest_unscaled_series], axis=0).squeeze(-1) # (len(test_series)-output_chunk_length+1, output_chunk_length, outdim)
+        logging.info("Calculating metrics for backtesting")
+        metrics = calculate_metrics(
+            true=sliding_window(self.test_series, self.config.model_config.output_chunk_length),
+            pred=predictions
+            )
+
+        logging.info("Calculating metrics for unnormalized backtesting")
+        metrics_unscaled = calculate_metrics(
+            true=sliding_window(test_unscaled_series, self.config.model_config.output_chunk_length),
+            pred=predictions_unscaled
+            )
+        
+        logging.info("W&B logging")
+        self.log_metrics(
+            metrics,
+            metrics_unscaled,
+            components,
+            self.test_series,
+            test_unscaled_series,
+            list_backtest_series,
+            list_backtest_unscaled_series,
+            self.train_val_series_trimmed,
+            train_val_unscaled_series_trimmed
+            )
+        
+    def log_metrics(
+        self,
+        metrics,
+        metrics_unscaled,
+        components,
+        test_series,
+        test_unscaled_series,
+        list_backtest_series,
+        list_backtest_unscaled_series,
+        train_val_series_trimmed,
+        train_val_unscaled_series_trimmed,
+        ):
+        wandb_log_results_and_plots(
+            metrics=metrics,
+            metrics_unscaled=metrics_unscaled,
+            components=components,
+            test_series=test_series,
+            test_unscaled_series=test_unscaled_series,
+            list_backtest_series=list_backtest_series,
+            list_backtest_unscaled_series=list_backtest_unscaled_series,
+            train_val_series_trimmed=train_val_series_trimmed,
+            train_val_unscaled_series_trimmed=train_val_unscaled_series_trimmed,
+            )
+        
+        wandb_log_bases(
+            self.model.model,
+            self.config.model_config.input_chunk_length,
+            self.config.model_config.output_chunk_length
+            )
+         
     def save_states(self, best_model=False):
         return
     

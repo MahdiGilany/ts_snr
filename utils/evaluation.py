@@ -71,12 +71,10 @@ def wandb_log_bases(
         
 
 def wandb_log_results_and_plots(
-    results: Dict,
-    results_noisy: Dict,
-    results_unscaled: Dict,
+    metrics: Dict,
+    metrics_unscaled: Dict,
     components: List,
     test_series: TimeSeries,
-    test_series_backtest: TimeSeries, # test series for backtest should be noisy if available
     test_unscaled_series: TimeSeries,
     list_backtest_series: List[TimeSeries],
     list_backtest_unscaled_series: List[TimeSeries],
@@ -91,18 +89,13 @@ def wandb_log_results_and_plots(
     log.info("logging results to wandb")
     # log best historical, best historical unscaled, best pred
     wandb.log({
-        f"test_best_historical_{result_name}": results[result_name].mean() 
-        for result_name in results.keys() if not np.isnan(results[result_name]).any()
+        f"test_best_historical_{result_name}": metrics[result_name].mean() 
+        for result_name in metrics.keys() if not np.isnan(metrics[result_name]).any()
         })
     
     wandb.log({
-        f"test_best_historical_noisy_{result_name}": results_noisy[result_name].mean()
-        for result_name in results_noisy.keys() if not np.isnan(results_noisy[result_name]).any()
-        })
-    
-    wandb.log({
-        f"test_best_historical_unscaled_{result_name}": results_unscaled[result_name].mean()
-        for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
+        f"test_best_historical_unscaled_{result_name}": metrics_unscaled[result_name].mean()
+        for result_name in metrics_unscaled.keys() if not np.isnan(metrics_unscaled[result_name]).any()
         })
     
     
@@ -112,13 +105,13 @@ def wandb_log_results_and_plots(
             break
         
         wandb.log({
-            f"test_best_historical_{result_name}_{component}": results[result_name][..., i].mean()
-            for result_name in results.keys() if not np.isnan(results[result_name]).any()
+            f"test_best_historical_{result_name}_{component}": metrics[result_name][..., i].mean()
+            for result_name in metrics.keys() if not np.isnan(metrics[result_name]).any()
             })
     
         wandb.log({
-            f"test_best_historical_unscaled_{result_name}_{component}": results_unscaled[result_name][..., i].mean()
-            for result_name in results_unscaled.keys() if not np.isnan(results_unscaled[result_name]).any()
+            f"test_best_historical_unscaled_{result_name}_{component}": metrics_unscaled[result_name][..., i].mean()
+            for result_name in metrics_unscaled.keys() if not np.isnan(metrics_unscaled[result_name]).any()
             })
     
         
@@ -132,7 +125,6 @@ def wandb_log_results_and_plots(
         if (i==len(components)-1) or ('Target' in component):
             plt.figure(figsize=(5, 3))
             train_val_series_trimmed[component].plot(label="scaled_train_val_"+ component, lw=0.5)
-            test_series_backtest[component].plot(label="scaled_noisy_test_" + component, lw=0.5)
             
             no_rainbow_plots = 100
             plot_interval = output_chunk_length if len(list_backtest_series)//output_chunk_length<no_rainbow_plots else len(list_backtest_series)//no_rainbow_plots
