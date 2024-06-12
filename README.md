@@ -1,7 +1,7 @@
 # Time series forecasting 
 run:
 ```bash
-python main.py experiment=experiment_name (e.g. experiment=exp_default)
+python (name)_experiment.py
 ```
 
 
