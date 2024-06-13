@@ -1,7 +1,23 @@
 # Time series forecasting 
 run:
 ```bash
-python (name)_experiment.py
+python deeptime_experiment.py 
+        --entity $ENTITY \ # W&B entity name, default mahdigilany
+        --group $GROUP \ # W&B group name
+        --name $NAME \ # W&B name
+        --use_wandb $USE_WANDB \ # use W&B logging  (True or False)
+        --resume $RESUME \ # resume training after preemption (True or False)
+        --cluster $SLURM \ # cluster type: local or slurm
+        --slurm_gres $GPU_TYPE \ # slurm gpu type, other slurm configs can be added
+        --seed $SEED \ # random seed
+        --epochs $EPOCHS \ # number of epochs
+        --batch_size $BATCH_SIZE \ # batch size
+        --dict_basis_norm_coeff $DICT_NORM_COEF \ # dictionary norm coefficient
+        --dict_basis_cov_coeff $DICT_COV_COEF \ # dictionary covariance coefficient
+        --dataset_name $DATA \ # dataset name e.g. etth2 or exchange_rate
+        --lookback $LOOKBACK \ # lookback window
+        --horizon $HORIZON \ # forecast horizon
+        --target_series_index $TARGET \ # target series index (None for multivariate)
 ```
 
 
