@@ -1,5 +1,5 @@
 # Time series forecasting 
-run:
+Main file to run:
 ```bash
 python deeptime_experiment.py 
         --entity $ENTITY \ # W&B entity name, default mahdigilany
@@ -19,6 +19,26 @@ python deeptime_experiment.py
         --horizon $HORIZON \ # forecast horizon
         --target_series_index $TARGET \ # target series index (None for multivariate)
 ```
+You need to change DATA_ROOT and PROJECT_PATH in .env file.
+
+For running on slurm cluster, you may need these changes:
+        
+        1) utils/setup.py: change the path to save the checkpoints in function "def slurm_checkpoint_dir()"
+        2) utils/setup.py: change the "slurm_setup" field in config class "SlurmJobConfig"
+
+Some notes:
+
+ - Used libraries are listed in requirements.txt
+ - Simple parsing is used for loading the config from @dataclasses and the parsing arguments
+ - Submitit is used for automatically handle submission to slurm
+ - data splits are done automatically in the code to (0.7, 0.2, 0.1) as common
+ - List of datasets can be found in data/data_registry.py
+ - For multivariate datasets, target_series_index should be None otherwise it should be -1 for the last series in the dataset as common in literature
+ - We use Darts TimeSeries class for handling datasets but models are implemented in PyTorch as Darts is too complex for our needs
+ - You can get inspired by the code in deeptime_experiment.py to implement your own models
+ - For reusing Darts models, you can get inspired by the code deeptime_darts_experiment.py but I suggest you reimplement any model in pytorch
+ - There are still a couple of parts in eval() function that seem complicated and needs more clean up. This is because of the complexity of Darts TimeSeries class. I tried to make the code as less dependent on Darts as possible
+
 
 
 
