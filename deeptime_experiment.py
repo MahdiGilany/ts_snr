@@ -290,8 +290,9 @@ class DeepTimeExp(BasicExperiment):
             target_series = target_series.cuda()
             
             pred_series = self.model(input_series)
-            reg_coef = self.config.model_config.dict_reg_coef
-            loss = criterion(pred_series, target_series) + reg_coef*self.model.reg_loss()
+            norm_coef = self.config.model_config.dict_basis_norm_coeff
+            cov_coef = self.config.model_config.dict_basis_cov_coeff
+            loss = criterion(pred_series, target_series) + norm_coef*self.model.dict_basis_norm_loss() + cov_coef*self.model.dict_basis_cov_loss()
             wandb.log({f"{desc}_loss": loss.item(), "epoch": self.epoch})
             
             if train:

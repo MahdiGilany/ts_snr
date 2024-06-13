@@ -32,7 +32,8 @@ class DeepTimeConfig:
     inr_layers: int = 5
     n_fourier_feats: int = 4096
     scales: list = field(default_factory=lambda: [0.01, 0.1, 1, 5, 10, 20, 50, 100])
-    dict_reg_coef: float = 0.0
+    dict_basis_norm_coeff: float = 0.0
+    dict_basis_cov_coeff: float = 0.0
 
 
 class DeepTIMeModel(nn.Module):
@@ -127,9 +128,18 @@ class DeepTIMeModel(nn.Module):
         #     pass
         return preds
 
-    def reg_loss(self) -> torch.Tensor:
+    def dict_basis_norm_loss(self) -> torch.Tensor:
         """Computes the regularization loss."""
         return self.time_reprs.norm(dim=1).mean() # + 0.05*self.learned_w.abs().mean()
+    
+    def dict_basis_cov_loss(self) -> torch.Tensor:
+        """Computes the regularization loss."""
+        B, T, D = self.time_reprs.shape
+        
+        mean_over_time = self.time_reprs.mean(dim=1, keepdim=True)
+        normalized_reprs = self.time_reprs - mean_over_time 
+        cov_reprs = (normalized_reprs.permute(0, 2, 1) @ normalized_reprs) / T
+        return torch.square(cov_reprs-torch.eye(D,device=self.time_reprs.device)[None]).mean()
     
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b

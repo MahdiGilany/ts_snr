@@ -141,7 +141,6 @@ dmypy.json
 
 # Lightning-Hydra-Template
 configs/local/default.yaml
-./data/
 logs/
 wandb/
 # .env
@@ -182,7 +181,6 @@ lightning_logs/
 
 database_config.json
 
-/data/
 
 experiments/
 
@@ -194,7 +192,7 @@ outputs/
 /notebooks/wandb
 /darts_logs
 
-/OLD 
+/OLD
 
 /slurm_logs
 
