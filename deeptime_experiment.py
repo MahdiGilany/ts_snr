@@ -62,11 +62,13 @@ class DataConfig:
     horizon: int = 96
     split_ratio: float = None
     use_scaler: bool = True
-    target_series_index: int = -1
+    target_series_index: tp.Union[int, str] = -1
     
     def __post_init__(self):
         if self.dataset_name == "exchange_rate" and self.target_series_index == -1:
             self.target_series_index = -2
+        if self.target_series_index == "None":
+            self.target_series_index = None
             
 
 @dataclass
@@ -83,11 +85,20 @@ class DeepTimeExpConfig(BasicExperimentConfig):
     epochs: int = 50
     batch_size: int = 256
     
-    data_config: DataConfig = DataConfig(dataset_name="exchange_rate")
-    model_config: DeepTimeConfig = DeepTimeConfig(model_horizon=data_config.horizon)
+    horizon: int = 96
+    
+    data_config: DataConfig = DataConfig()
+    model_config: DeepTimeConfig = DeepTimeConfig()
     
     optimizer_config: OptimizerConfig = OptimizerConfig()
-    scheduler_config: SchedulerConfig = SchedulerConfig(T_max=epochs, eta_max=optimizer_config.lr)
+    scheduler_config: SchedulerConfig = SchedulerConfig()
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.data_config.horizon = self.horizon
+        self.model_config.horizon = self.horizon
+        self.scheduler_config.T_max = self.epochs
+        self.scheduler_config.eta_max = self.optimizer_config.lr
 
 
 class DeepTimeExp(BasicExperiment):
