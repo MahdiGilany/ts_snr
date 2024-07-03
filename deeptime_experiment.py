@@ -51,8 +51,9 @@ class SchedulerConfig:
 @dataclass  
 class OptimizerConfig:
     lr: float = 0.001
-    weight_decay: float = 0
+    weight_decay: float = 0.01
     amsgrad: bool = False
+    patience: int = 7
 
 @dataclass
 class DataConfig:
@@ -62,6 +63,7 @@ class DataConfig:
     horizon: int = 96
     split_ratio: float = None
     use_scaler: bool = True
+    extend_val: bool = True
     target_series_index: tp.Union[int, str] = -1
     
     def __post_init__(self):
@@ -74,7 +76,7 @@ class DataConfig:
 @dataclass
 class DeepTimeExpConfig(BasicExperimentConfig):
     """Configuration for the experiment."""
-    name: str = "deeptime"
+    name: str = "deeptime_true_targetall"
     group: str = None
     project: str = "timeseries" 
     resume: bool = False
@@ -128,10 +130,17 @@ class DeepTimeExp(BasicExperiment):
             if self.best_val_loss >= val_loss:
                 self.best_val_loss = val_loss
                 self.save_states(best_model=True)
+                self.early_stop_epoch = 0
+            else:
+                self.early_stop_epoch += 1
+                if self.early_stop_epoch >= self.config.optimizer_config.patience:
+                    logging.info(f"Early stopping at epoch {self.epoch}")
+                    break
             
         logging.info('Test model')
         # Run test and save states if best score updated
         self.model.load_state_dict(torch.load(os.path.join(self.ckpt_dir,"best_model.pth")))
+        logging.info(f"Best val loss: {self.best_val_loss}")
         self.run_epoch(self.test_loader, train=False, desc="test")
     
     def setup(self):
@@ -157,6 +166,7 @@ class DeepTimeExp(BasicExperiment):
         # Setup epoch and best score
         self.epoch = 0 if state is None else self.epoch
         self.best_val_loss = np.inf if state is None else self.best_val_loss
+        self.early_stop_epoch = 0
         
         logging.info(f"Number of parameters: {sum(p.numel() for p in self.model.parameters())}")
         logging.info(f"""Trainable parameters: 
@@ -177,8 +187,10 @@ class DeepTimeExp(BasicExperiment):
         # backtest series
         num_trimmed_train_val = max(len(self.test_series),self.config.data_config.lookback)
         self.train_val_series_trimmed = concatenate([self.train_series, self.val_series])[-num_trimmed_train_val:] # TODO: this is not a good way to do it
-        self.test_hat_series = concatenate([self.train_val_series_trimmed[-self.config.data_config.lookback:], self.test_series]) # use a lookback of val for testing
+        self.extended_val_series = concatenate([self.train_series[-self.config.data_config.lookback:], self.val_series]) # use a lookback of val for validation
+        self.extended_test_series = concatenate([self.train_val_series_trimmed[-self.config.data_config.lookback:], self.test_series]) # use a lookback of val for testing
 
+        
         # datasets and loaders
         train_ds = PastCovariatesSequentialDataset(
             self.train_series,
@@ -188,14 +200,15 @@ class DeepTimeExp(BasicExperiment):
             use_static_covariates=False
             )
         val_ds = PastCovariatesSequentialDataset(
-            self.val_series,
+            self.extended_val_series if self.config.data_config.extend_val else self.val_series,
             input_chunk_length=self.config.data_config.lookback,
             output_chunk_length=self.config.data_config.horizon,
             covariates=None,
             use_static_covariates=False
             )
+        ## test_ds is always created from both validation and test data
         test_ds = PastCovariatesSequentialDataset(
-            self.test_hat_series,
+            self.extended_test_series,
             input_chunk_length=self.config.data_config.lookback,
             output_chunk_length=self.config.data_config.horizon,
             covariates=None,
@@ -270,7 +283,7 @@ class DeepTimeExp(BasicExperiment):
                 
             elif scheduler == 'cosine_annealing':
                 lr = eta_max = param_group['lr']
-                fn = lambda T_cur: (eta_min + 0.5 * (eta_max - eta_min) * (
+                fn = lambda T_cur: (eta_min + 0.5 * (eta_max - eta_min)  * (
                             1.0 + math.cos((T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
                 
             elif scheduler == 'cosine_annealing_with_linear_warmup':
@@ -293,8 +306,11 @@ class DeepTimeExp(BasicExperiment):
         with torch.no_grad() if not train else torch.enable_grad():
             self.model.train() if train else self.model.eval()
         
-        criterion = TorchLosses('mse')
+        # criterion = TorchLosses('mse')
+        criterion = torch.nn.MSELoss(reduction='none')
         preds = []
+        targets = []
+        losses = []
         for i, batch in enumerate(tqdm(loader, desc=desc)):
             input_series, _, _, target_series = batch
             input_series = input_series.cuda()
@@ -303,29 +319,41 @@ class DeepTimeExp(BasicExperiment):
             pred_series = self.model(input_series)
             norm_coef = self.config.model_config.dict_basis_norm_coeff
             cov_coef = self.config.model_config.dict_basis_cov_coeff
-            loss = criterion(pred_series, target_series) + norm_coef*self.model.dict_basis_norm_loss() + cov_coef*self.model.dict_basis_cov_loss()
-            wandb.log({f"{desc}_loss": loss.item(), "epoch": self.epoch})
+            loss_mse = criterion(pred_series, target_series)
+            loss = loss_mse.mean() + norm_coef*self.model.dict_basis_norm_loss() + cov_coef*self.model.dict_basis_cov_loss()
+            losses.append(loss_mse.detach().cpu().numpy())
             
             if train:
                 self.optimizer.zero_grad()
                 loss.backward()
+                nn.utils.clip_grad_norm_(self.model.parameters(), 10.0)
                 self.optimizer.step()
                 self.scheduler.step()
                 wandb.log({"lr": self.scheduler.get_last_lr()[1], "epoch": self.epoch})
             else:
                 # collecting predictions for val and test
                 preds.append(pred_series.detach().cpu())
+                targets.append(target_series.detach().cpu())
+                if input_series.shape[0] == 1:
+                    # skip final batch if batch_size == 1
+                    # due to bug in torch.linalg.solve which raises error when batch_size == 1
+                    continue
         
         if desc == "test":
             preds = torch.cat(preds, dim=0)
+            targets = torch.cat(targets, dim=0)
             # flip back as dataset get_item is designed in reverse order
             preds = preds.flip(dims=[0]) 
-            self.eval_test(preds)
+            targets = targets.flip(dims=[0])
+            self.eval_test(preds, targets)
 
-        return loss.item()
+        total_avg_loss = np.concatenate(losses).mean()
+        wandb.log({f"{desc}_loss": total_avg_loss, "epoch": self.epoch})
+        return total_avg_loss
     
-    def eval_test(self, preds):
+    def eval_test(self, preds, targets):
         # TODO: this eval only works for self.test_series for now
+        # TODO: this can be improved a lot
         logging.info('Evaluation of test series')
         # turn preds and targets into TimeSeries
         list_backtest_series = []
@@ -333,13 +361,13 @@ class DeepTimeExp(BasicExperiment):
         horizon = self.config.data_config.horizon
         for i in tqdm(range(preds.shape[0]), desc="Turn predictions into timeseries"):
             backtest_series = TimeSeries.from_times_and_values(
-                self.test_hat_series.time_index[lookback+i:lookback+i+horizon], # test_hat_series starts from inside val_series
+                self.extended_test_series.time_index[lookback+i:lookback+i+horizon], # extended_test_series starts from inside val_series
                 preds[i,...].detach().cpu().numpy(),
                 freq=self.test_series.freq,
                 columns=self.test_series.components
                 )
             list_backtest_series.append(backtest_series)
-        
+                
         # calculate metrics        
         (metrics,
         metrics_unscaled,

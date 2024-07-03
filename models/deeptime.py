@@ -129,16 +129,23 @@ class DeepTIMeModel(nn.Module):
 
     def dict_basis_norm_loss(self) -> torch.Tensor:
         """Computes the regularization loss."""
-        return self.time_reprs.norm(dim=1).mean() # + 0.05*self.learned_w.abs().mean()
+        B, T, D = self.time_reprs.shape
+        return (self.time_reprs.norm(dim=1)/T).mean() # + 0.05*self.learned_w.abs().mean()
     
     def dict_basis_cov_loss(self) -> torch.Tensor:
         """Computes the regularization loss."""
         B, T, D = self.time_reprs.shape
+        time_reprs = self.time_reprs[0, :, :]
         
-        mean_over_time = self.time_reprs.mean(dim=1, keepdim=True)
-        normalized_reprs = self.time_reprs - mean_over_time 
-        cov_reprs = (normalized_reprs.permute(0, 2, 1) @ normalized_reprs) / T
-        return torch.square(cov_reprs-torch.eye(D,device=self.time_reprs.device)[None]).mean()
+        mean_over_time = time_reprs.mean(dim=0, keepdim=True)
+        normalized_reprs = time_reprs - mean_over_time 
+        cov_reprs = (normalized_reprs.permute(1, 0) @ normalized_reprs) / T
+        
+        diag = torch.eye(D,device=time_reprs.device)
+        # return torch.square(cov_reprs[~diag.bool()]).mean()
+        return torch.square(cov_reprs-torch.eye(D,device=time_reprs.device)).mean()
+    
+    # def regularization_losses(self):
     
     def forecast(self, inp: torch.Tensor, w: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
         return torch.einsum('... d o, ... t d -> ... t o', [w, inp]) + b

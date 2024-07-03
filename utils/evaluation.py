@@ -35,9 +35,9 @@ def wandb_log_bases(
     coords = model.get_coords(lookback_len, horizon_len).cuda()
     time_reprs = model.inr(coords).squeeze(0).detach().cpu().numpy() # shape = (lookback+horizon, layer_size)
     
-    # csv creation of bases
-    bases_df = pd.DataFrame(time_reprs)
-    bases_df.to_csv(os.path.join(exp_dir, "bases.csv"), index=False)
+    # # csv creation of bases
+    # bases_df = pd.DataFrame(time_reprs)
+    # bases_df.to_csv(os.path.join(exp_dir, "bases.csv"), index=False)
     
     # wandb table creation of bases
     columns = [f"dim_{i}" for i in range(time_reprs.shape[1])]
