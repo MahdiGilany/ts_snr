@@ -85,3 +85,32 @@ class RidgeRegressorTrimmed(nn.Module):
 
     def reg_coeff(self) -> Tensor:
         return F.softplus(self._lambda)
+    
+
+class KernelRidgeRegressor(nn.Module):
+    def __init__(self, lambda_init: Optional[float] =0.):
+        super().__init__()
+        self._lambda = nn.Parameter(torch.as_tensor(lambda_init, dtype=torch.float), requires_grad=True)
+        self._lambda_rbf_σ = nn.Parameter(torch.as_tensor(15.0, dtype=torch.float), requires_grad=True)
+        
+    def forward(self, reprs: Tensor, x: Tensor, σ2_y: Optional[float] = None) -> Tensor:
+        if σ2_y is None:
+            σ2_y = self.reg_coeff()
+        
+        # find kernel on reprs
+        K = torch.exp(-(torch.norm(reprs.unsqueeze(1) - reprs.unsqueeze(2), dim=-1)**2)/(2*self._lambda_rbf_σ**2)) # exp(|x_i - x_j|^2 / 2\sigma^2) 
+        
+        # kernel inverse
+        K_inv = torch.linalg.inv(K + σ2_y*torch.eye(K.shape[1], device=K.device))
+        
+        α = K_inv @ x # (batch_size, lookback_len, n_dim)
+        return α
+
+    def forecast(self, lookback_reprs: Tensor, horizon_reprs: Tensor, α: Tensor) -> Tensor:
+        # find kernel on horizon reprs
+        K_star = torch.exp(-(torch.norm(lookback_reprs.unsqueeze(1) - horizon_reprs.unsqueeze(2), dim=-1)**2)/(2*self._lambda_rbf_σ**2)) # (1, horizon, lookback)
+
+        return K_star @ α 
+        
+    def reg_coeff(self) -> Tensor:
+        return F.softplus(self._lambda)

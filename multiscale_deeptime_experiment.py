@@ -173,10 +173,10 @@ class DeepTimeExp(BasicExperiment):
                      {sum(p.numel() for p in self.model.parameters() if p.requires_grad)}""")
 
     def setup_data(self):
-        from data.data_registry import create_dataset, DataSeries 
+        from data.data_registry import create_dataset, DatasetSeries 
         from darts.timeseries import TimeSeries, concatenate        
         
-        data_series: DataSeries = create_dataset(**self.config.data_config.__dict__)
+        data_series: DatasetSeries = create_dataset(**self.config.data_config.__dict__)
         
         self.train_series: TimeSeries = data_series.train_series
         self.val_series: TimeSeries = data_series.val_series

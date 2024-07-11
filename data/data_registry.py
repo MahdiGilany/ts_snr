@@ -105,7 +105,7 @@ def split_series(
     total_series, _ = series.split_before(sum(split_ratio)) # in case split ratio is not sum to 1 (for ETT in literature)
     train_series, test_series = total_series.split_before(sum(split_ratio[0:2])/sum(split_ratio))
     train_series, val_series = train_series.split_before(split_ratio[0]/sum(split_ratio[0:2]))
-    data_series = DataSeries(
+    data_series = DatasetSeries(
         train_series=train_series,
         val_series=val_series,
         test_series=test_series,
@@ -113,8 +113,22 @@ def split_series(
     return data_series    
 
 
+def window_transform(
+    series: TimeSeries,
+    window_size: int,
+    ):
+    centered = False
+    transformation = {
+            "function": "mean",
+            "mode": "rolling",
+            "window": window_size,
+            "center": centered,
+            "min_periods": 1,
+        }
+    return series.window_transform(transforms=transformation, forecasting_safe=True)
+    
 @dataclass
-class DataSeries:
+class DatasetSeries:
     train_series: TimeSeries = None
     val_series: TimeSeries = None
     test_series: TimeSeries = None
@@ -122,6 +136,17 @@ class DataSeries:
     backtest_series: TimeSeries = None
     scaler: Scaler = None
 
+@dataclass
+class DataSeries:
+    series: TimeSeries = None
+    covariates: TimeSeries = None
+
+@dataclass
+class DatasetCovSeries:
+    train_series: DataSeries = DataSeries()
+    val_series: DataSeries = DataSeries()
+    test_series: DataSeries = DataSeries()
+    scaler: Scaler = None
 
 def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
     
@@ -131,16 +156,18 @@ def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
         split_ratio: Tuple[float] = default_split,
         use_scaler: bool = True,
         target_series_index: int = None,
+        multiscales: list = None,
         **kwargs
         ) -> Union[Tuple[TimeSeries, TimeSeries], Tuple[TimeSeries, TimeSeries, Scaler]]:
         """Creates a Darts dataset from a Darts DatasetLoaderCSV class.
         """
+        # set split ratio 
         if split_ratio is None:
             split_ratio = default_split
-        
         if isinstance(split_ratio, str):
             split_ratio = tuple(map(float, split_ratio.split()))
         
+        # load darts dataset
         data_class = DatasetClass()
         data_class._root_path = DATA_ROOT
         series = data_class.load().astype(np.float32) 
@@ -151,14 +178,23 @@ def darts_predefined_datasets(DatasetClass: DatasetLoaderCSV):
             series = series[component]
             print(f"Using component {component} as target series.")
         
+        # creates a moving average series 
+        if multiscales is not None:
+            covariate_series = []
+            for scale in multiscales:
+                covariate_series.append(window_transform(series, window_size=scale))
+            
+        # create dataseries for each series   
         data_series = split_series(series, split_ratio)
+        
+        
         
         if use_scaler:
             scaler = Scaler(scaler=preprocessing.StandardScaler())
             train_series_scaled = scaler.fit_transform(data_series.train_series)
             val_series_scaled = scaler.transform(data_series.val_series)
             test_series_scaled = scaler.transform(data_series.test_series)
-            data_scaled_series = DataSeries(
+            data_scaled_series = DatasetSeries(
                 train_series=train_series_scaled,
                 val_series=val_series_scaled,
                 test_series=test_series_scaled,
@@ -302,7 +338,7 @@ def crypto(
         train_series_scaled = scaler.fit_transform(data_series.train_series)
         val_series_scaled = scaler.transform(data_series.val_series)
         test_series_scaled = scaler.transform(data_series.test_series)
-        data_scaled_series = DataSeries(
+        data_scaled_series = DatasetSeries(
             train_series=train_series_scaled,
             val_series=val_series_scaled,
             test_series=test_series_scaled,
