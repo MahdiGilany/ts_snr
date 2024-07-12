@@ -43,7 +43,7 @@
 
 # kernel deeptime
 DATA="ettm2" # "exchange_rate" "etth2" "traffic" "electricity"
-SUB_EXP="MultCheckScalesV2lrσ.01" 
+SUB_EXP="MultCheckScalesV2lrσ.001" 
 LOOKBACK=960 # 288 336 672 720
 HORIZON=192 # 336 720
 TARGET=None
@@ -62,7 +62,7 @@ do
         --layer_size 256 \
         --inr_layers 5 \
         --patience 30 \
-        --lr_σ 0.01 \
+        --lr_σ 0.001 \
         --dataset_name $DATA \
         --lookback $LOOKBACK \
         --horizon $HORIZON \

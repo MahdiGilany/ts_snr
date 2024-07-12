@@ -89,7 +89,7 @@ class KernelDeepTimeExp(DeepTimeExp):
         for param_name, param in self.model.named_parameters():
             if '_lambda' in param_name:
                 group1_params.append(param)
-            if 'kernel_σ' in param_name:
+            elif 'kernel_σ' in param_name:
                 groupσ_params.append(param)
             elif any([mod in param_name for mod in no_decay_list]):
                 group2_params.append(param)

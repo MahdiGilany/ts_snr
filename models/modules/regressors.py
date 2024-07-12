@@ -107,7 +107,7 @@ class KernelRidgeRegressor(nn.Module):
             σ2_y = self.reg_coeff()
         
         # find kernel on reprs
-        K = self.kernel_func(reprs, reprs, self.reg_coeff_kernel_σ()) # exp(|x_i - x_j|^2 / 2\sigma^2)
+        K = self.kernel_func(reprs, reprs, self.kernel_σ) # exp(|x_i - x_j|^2 / 2\sigma^2)
         # K = torch.exp(-(torch.norm(reprs.unsqueeze(1) - reprs.unsqueeze(2), dim=-1)**2)/(2*1*self._lambda_rbf_σ**2)) # exp(|x_i - x_j|^2 / 2\sigma^2) 
         
         # kernel inverse
@@ -118,7 +118,7 @@ class KernelRidgeRegressor(nn.Module):
 
     def forecast(self, lookback_reprs: Tensor, horizon_reprs: Tensor, α: Tensor) -> Tensor:
         # find kernel on horizon reprs
-        K_star = self.kernel_func(lookback_reprs, horizon_reprs, self.reg_coeff_kernel_σ())
+        K_star = self.kernel_func(lookback_reprs, horizon_reprs, self.kernel_σ)
         # K_star = torch.exp(-(torch.norm(lookback_reprs.unsqueeze(1) - horizon_reprs.unsqueeze(2), dim=-1)**2)/(2*1*self._lambda_rbf_σ**2)) # (1, horizon, lookback)
 
         return K_star @ α 
