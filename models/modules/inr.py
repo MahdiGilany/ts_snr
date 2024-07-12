@@ -35,7 +35,7 @@ class INRLayer(nn.Module):
 
 class INR(nn.Module):
     def __init__(self, in_feats: int, layers: int, layer_size: int, n_fourier_feats: int, scales: float,
-                 dropout: Optional[float] = 0.1):
+                 dropout: Optional[float] = 0.1, layer_norm: bool = False):
         super().__init__()
         self.features = nn.Linear(in_feats, layer_size) if n_fourier_feats == 0 \
             else GaussianFourierFeatureTransform(in_feats, n_fourier_feats, scales)
@@ -43,6 +43,7 @@ class INR(nn.Module):
             else n_fourier_feats
         layers = [INRLayer(in_size, layer_size, dropout=dropout)] + \
                  [INRLayer(layer_size, layer_size, dropout=dropout) for _ in range(layers - 1)]
+        layers = layers if not layer_norm else  layers + [nn.LayerNorm(layer_size)]
         self.layers = nn.Sequential(*layers)
 
     def forward(self, x: Tensor) -> Tensor:

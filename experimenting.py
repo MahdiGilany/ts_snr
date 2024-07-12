@@ -9,11 +9,17 @@ from deeptime_experiment import DeepTimeConfig
 
 
 HORIZONS = [96, 192, 336, 720]
-LOOKBACKS_M_MULT = {
-    "exchange_rate": [1, 5, 7, 3],
-    "ettm2": [7, 5, 3, 1],
-}
 
+# deeptime
+# LOOKBACKS_M_MULT = {
+#     "exchange_rate": [1, 5, 7, 3],
+#     "ettm2": [7, 5, 3, 1],
+# }
+# kernel-deeptime
+LOOKBACKS_M_MULT = {
+    "exchange_rate": [7, 5, 3, 2], # last one is not yet correct
+    "ettm2": [7, 5, 3, 1], # last one is not yet correct
+}
 
 
 # class SeqKernelDeepTimeExp(KernelDeepTimeExp):
@@ -81,13 +87,11 @@ if __name__ == '__main__':
     
     if (args.lookback_mult is None) or (args.lookback_mult=="None"):
         if args.exp_config.data_config.target_series_index is None:
-            print(args.exp_config.data_config.target_series_index, type(args.exp_config.data_config.target_series_index))
             LOOKBACKS = LOOKBACKS_M_MULT[args.exp_config.data_config.dataset_name]
         else:
             raise ValueError("Not implemented yet")
     else:
         LOOKBACKS = list(map(int, args.lookback_mult.split(",")))
-        print(LOOKBACKS)
     
     for horizon, lookback_mult in zip(HORIZONS, LOOKBACKS):
         submit_experiment(args, horizon, lookback_mult)

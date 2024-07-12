@@ -33,6 +33,7 @@ class KernelDeepTimeConfig:
     inr_layers: int = 5
     n_fourier_feats: int = 4096
     scales: list = field(default_factory=lambda: [0.01, 0.1, 1, 5, 10, 20, 50, 100])
+    layer_norm: bool = True
     # dict_basis_norm_coeff: float = 0.0
     # dict_basis_cov_coeff: float = 0.0
     # w_var_coeff: float = 0.0
@@ -53,7 +54,8 @@ class KernelDeepTIMeModel(nn.Module):
             layers=config.inr_layers, 
             layer_size=config.layer_size,
             n_fourier_feats=config.n_fourier_feats,
-            scales=config.scales
+            scales=config.scales,
+            layer_norm=config.layer_norm,
             )
         self.adaptive_α = KernelRidgeRegressor()
         
@@ -71,12 +73,12 @@ class KernelDeepTIMeModel(nn.Module):
         lookback_reprs = time_reprs[:, :-tgt_horizon_len] # shape = (batch_size, horizen, layer_size)
         horizon_reprs = time_reprs[:, -tgt_horizon_len:]
     
-        α = self.adaptive_α(lookback_reprs, x) 
+        α, kernel_σ = self.adaptive_α(lookback_reprs, x) 
         preds = self.adaptive_α.forecast(lookback_reprs, horizon_reprs, α) # (batch_size, horizen, n_dim)
   
         self.learned_α = α
         
-        return preds
+        return preds, kernel_σ
     
     '''
     def dict_basis_norm_loss(self) -> torch.Tensor:
