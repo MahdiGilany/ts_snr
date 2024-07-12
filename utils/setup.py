@@ -268,8 +268,8 @@ class BasicExperiment:
         return parser.parse_args().config
 
     @classmethod
-    def submit(cls):
-        cfg = cls.parse_args()
+    def submit(cls, cfg=None):
+        cfg = cls.parse_args() if cfg is None else cfg
         executor = cls.get_submitit_executor(cfg)
         job = cls(cfg)
        

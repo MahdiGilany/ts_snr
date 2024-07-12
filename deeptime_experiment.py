@@ -64,7 +64,7 @@ class DataConfig:
     split_ratio: float = None
     use_scaler: bool = True
     extend_val: bool = True
-    target_series_index: tp.Union[int, str] = -1
+    target_series_index: tp.Union[int, str] = None
     
     def __post_init__(self):
         if self.dataset_name == "exchange_rate" and self.target_series_index == -1:

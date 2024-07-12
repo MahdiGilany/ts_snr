@@ -44,7 +44,7 @@ from utils.evaluation import (
 @dataclass
 class KernelDeepTimeExpConfig(BasicExperimentConfig):
     """Configuration for the experiment."""
-    name: str = "kerneldeeptime_exchange_out192_vrtNone"
+    name: str = "kernel-deeptime_test"
     group: str = None
     project: str = "timeseries" 
     resume: bool = False
