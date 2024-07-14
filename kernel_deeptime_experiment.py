@@ -43,6 +43,7 @@ from utils.evaluation import (
 @dataclass  
 class KernelOptimizerConfig(OptimizerConfig):
     lr_σ: float = 0.01 
+    σ_warmup_epochs: int = 0
 
 @dataclass
 class KernelDeepTimeExpConfig(BasicExperimentConfig):
@@ -100,7 +101,7 @@ class KernelDeepTimeExp(DeepTimeExp):
             {'params': group1_params, 'weight_decay': 0, 'lr': 1.0, 'scheduler': 'cosine_annealing'},
             {'params': group2_params, 'weight_decay': 0, 'scheduler': 'cosine_annealing_with_linear_warmup'},
             {'params': group3_params, 'scheduler': 'cosine_annealing_with_linear_warmup'},
-            {'params': groupσ_params, 'weight_decay': 0, 'lr': self.config.optimizer_config.lr_σ, 'scheduler': 'cosine_annealing'},
+            {'params': groupσ_params, 'weight_decay': 0, 'lr': self.config.optimizer_config.lr_σ, 'scheduler': 'cosine_annealing_with_zero_warmup'},
             ]
         self.optimizer: optim.optimizer.Optimizer = optim.Adam(
             list_params,
@@ -112,6 +113,7 @@ class KernelDeepTimeExp(DeepTimeExp):
     
         eta_min = self.config.scheduler_config.eta_min
         warmup_epochs = self.config.scheduler_config.warmup_epochs * len(self.train_loader)
+        σ_warmup_epochs = self.config.optimizer_config.σ_warmup_epochs * len(self.train_loader)
         T_max = self.config.scheduler_config.T_max * len(self.train_loader)
         
         scheduler_fns = []
@@ -129,6 +131,12 @@ class KernelDeepTimeExp(DeepTimeExp):
             elif scheduler == 'cosine_annealing_with_linear_warmup':
                 lr = eta_max = param_group['lr']
                 fn = lambda T_cur: T_cur / warmup_epochs if T_cur < warmup_epochs else (eta_min + 0.5 * (
+                            eta_max - eta_min) * (1.0 + math.cos(
+                    (T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
+            
+            elif scheduler == 'cosine_annealing_with_zero_warmup':
+                lr = eta_max = param_group['lr']
+                fn = lambda T_cur: 0 if T_cur < σ_warmup_epochs else (eta_min + 0.5 * (
                             eta_max - eta_min) * (1.0 + math.cos(
                     (T_cur - warmup_epochs) / (T_max - warmup_epochs) * math.pi))) / lr
                 
